@@ -2,23 +2,41 @@
 import { ref } from 'vue'
 import TimePill from '@/components/TimePill.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
-const choices = [30, 45, 60]
+const choices = [25, 30, 45, 60]
 const selected = ref<number | null>(null)
+const handleSelect = (m: number) => { selected.value = m }
 </script>
 
 <template>
-  <main class="min-h-screen grid place-items-center p-6">
-    <section class="w-full max-w-[420px] space-y-6">
-      <h2 class="text-2xl font-semibold text-center">Choose Focus Time</h2>
-      <div class="space-y-3">
-        <button v-for="m in choices" :key="m" @click="selected = m" class="w-full">
-          <TimePill :label="String(m)" :active="selected===m"/>
-        </button>
+  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-white to-blue-50">
+    <section class="w-full max-w-[520px] space-y-8">
+      <header class="space-y-2 text-center">
+        <h2 class="text-2xl md:text-3xl font-semibold">Choose Focus Time</h2>
+        <p class="text-gray-500 text-sm">Pick a session length to begin</p>
+      </header>
+
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <TimePill
+          v-for="m in choices"
+          :key="m"
+          :label="String(m)"
+          :active="selected===m"
+          @click="handleSelect(m)"
+        />
       </div>
-      <PrimaryButton
-        label="Start"
-        :to="selected ? { path: '/timer', query: { m: selected } } : undefined"
-      />
+
+      <div class="pt-2">
+        <PrimaryButton
+          label="Start"
+          :disabled="!selected"
+          :to="selected ? { path: '/timer', query: { m: selected } } : undefined"
+        />
+        <p class="mt-2 text-center text-sm text-gray-500">
+          <span v-if="!selected">Select a duration to continue</span>
+          <span v-else>Ready to start a {{ selected }} min session</span>
+        </p>
+      </div>
     </section>
   </main>
+  
 </template>
