@@ -1,0 +1,15 @@
+{
+    "version": 1.0,
+    "customData": [
+      {
+        "name": "@tailwind",
+        "description": "Tailwind CSS directives",
+        "references": [
+          {
+            "name": "Tailwind CSS Documentation",
+            "url": "https://tailwindcss.com/docs"
+          }
+        ]
+      }
+    ]
+  }
