@@ -20,13 +20,13 @@ function handleStop() {
 </script>
 
 <template>
-  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-blue-50 to-white">
-    <section class="w-full max-w-[560px] space-y-8 text-center">
+  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-blue-50 to-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <section class="w-full max-w-[560px] space-y-6 sm:space-y-8 text-center">
       <!-- 呼吸圈 + 倒數文字 -->
-      <div class="mx-auto relative w-full max-w-[420px]">
+      <div class="mx-auto relative w-full max-w-[360px] sm:max-w-[420px]">
         <ThreeBreathingSphere />
         <div class="absolute inset-0 grid place-items-center pointer-events-none">
-          <div class="text-3xl md:text-4xl font-semibold tabular-nums drop-shadow-sm">
+          <div class="text-3xl md:text-4xl font-semibold tabular-nums drop-shadow-sm tracking-wide">
             {{ fmt() }}
           </div>
         </div>
@@ -39,7 +39,7 @@ function handleStop() {
         Stop
       </button>
 
-      <p v-if="!running" class="text-gray-500">Paused</p>
+      <p v-if="!running" class="text-gray-500 leading-relaxed tracking-wide">Paused</p>
     </section>
   </main>
 </template>

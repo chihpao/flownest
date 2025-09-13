@@ -8,11 +8,11 @@ const handleSelect = (m: number) => { selected.value = m }
 </script>
 
 <template>
-  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-white to-blue-50">
-    <section class="w-full max-w-[520px] space-y-8">
-      <header class="space-y-2 text-center">
-        <h2 class="text-2xl md:text-3xl font-semibold">Choose Focus Time</h2>
-        <p class="text-gray-500 text-sm">Pick a session length to begin</p>
+  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-white to-blue-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <section class="w-full max-w-[520px] space-y-6 sm:space-y-8">
+      <header class="space-y-1.5 sm:space-y-2 text-center">
+        <h2 class="text-2xl md:text-3xl font-semibold tracking-wide">Choose Focus Time</h2>
+        <p class="text-gray-500 text-sm leading-relaxed tracking-wide">Pick a session length to begin</p>
       </header>
 
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -31,7 +31,7 @@ const handleSelect = (m: number) => { selected.value = m }
           :disabled="!selected"
           :to="selected ? { path: '/timer', query: { m: selected } } : undefined"
         />
-        <p class="mt-2 text-center text-sm text-gray-500">
+        <p class="mt-2 text-center text-sm text-gray-500 leading-relaxed tracking-wide">
           <span v-if="!selected">Select a duration to continue</span>
           <span v-else>Ready to start a {{ selected }} min session</span>
         </p>
