@@ -42,15 +42,20 @@ watch(remaining, (now, prev) => {
         <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Stay Focused</p>
       </header>
 
-      <!-- Sphere + Progress Ring + Timer -->
-      <div class="mx-auto relative w-full max-w-[340px] sm:max-w-[420px] ring-wrap" :style="{ '--progress': (progress*360) + 'deg' }">
-        <ThreeBreathingSphere />
-        <div class="absolute inset-0 grid place-items-center pointer-events-none">
-          <div class="px-3.5 py-1.5 rounded-full bg-white/65 backdrop-blur-sm shadow-sm border border-white/60">
+      <!-- Timer Display -->
+      <div class="mx-auto w-full max-w-[340px] sm:max-w-[420px]">
+        <!-- Time Above the Sphere -->
+        <div class="mb-3 sm:mb-4 grid place-items-center">
+          <div class="px-3.5 py-1.5 rounded-full bg-white/70 backdrop-blur-sm shadow-sm border border-white/60">
             <div class="text-3xl md:text-4xl font-semibold tabular-nums tracking-wide select-none text-slate-900">
               {{ fmt() }}
             </div>
           </div>
+        </div>
+        <!-- Sphere + Progress -->
+        <div class="relative">
+          <ThreeBreathingSphere />
+          <div class="progress-ring" :style="{ '--progress': (progress*360) + 'deg' }"></div>
         </div>
       </div>
 
@@ -66,8 +71,16 @@ watch(remaining, (now, prev) => {
 </template>
 
 <style scoped>
-.ring-wrap { position: relative; }
-.ring-wrap::before {
+.progress-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.progress-ring::before {
   content: '';
   position: absolute;
   inset: -10px;
@@ -76,10 +89,11 @@ watch(remaining, (now, prev) => {
     conic-gradient(from -90deg, rgba(99,102,241,0.2) 0deg, rgba(99,102,241,0.2) var(--progress), rgba(148,163,184,0.12) var(--progress));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 0);
   mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 0);
-  pointer-events: none;
   filter: saturate(1.05);
+  z-index: 5;
 }
-.ring-wrap::after{
+
+.progress-ring::after {
   content: '';
   position: absolute;
   inset: -18px;
@@ -88,9 +102,8 @@ watch(remaining, (now, prev) => {
     radial-gradient(40% 40% at 50% 30%, rgba(138,180,255,0.24), rgba(255,255,255,0) 70%),
     radial-gradient(50% 50% at 70% 70%, rgba(255,170,210,0.12), rgba(255,255,255,0) 72%);
   filter: blur(14px) saturate(1.02);
-  pointer-events: none;
+  z-index: 1;
 }
-.ring-wrap::before, .ring-wrap::after { z-index: 0; }
 .stop-btn { color: #fff !important; }
 .stop-btn:disabled { color: rgba(255,255,255,0.75) !important; }
 </style>

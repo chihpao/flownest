@@ -1,0 +1,210 @@
+  scene.add(keyLight)
+
+  rimLight = new THREE.DirectionalLight(0x88ccff, 0.8)
+  rimLight.position.set(-4, -2, 6)
+  scene.add(rimLight)
+
+  const fillLight = new THREE.PointLight(0xffaabb, 0.6, 15)
+  fillLight.position.set(-3, -2, 3)
+  scene.add(fillLight)
+
+  movingLight = new THREE.PointLight(0xff66aa, 0.8, 20)
+  movingLight.castShadow = true
+  scene.add(movingLight)
+
+  // ?øÊ?ÂºèË???  const onResize = () => {
+    const newSize = updateSize()
+    if (Math.abs(newSize - currentSize) > 10) {
+      currentSize = newSize
+      camera.aspect = 1
+      camera.updateProjectionMatrix()
+      renderer.setSize(currentSize, currentSize)
+    }
+  }
+  
+  window.addEventListener('resize', onResize)
+
+  // ?ïÁï´Âæ™Áí∞ - ?¥Ëá™?∂Á??ºÂê∏ÁØÄÂ•?  startTime = performance.now()
+  const loop = () => {
+    const t = (performance.now() - startTime) / 1000
+    
+    // ?¥Ëá™?∂Á??ºÂê∏?±Ê? (7Áßí‰?Ê¨°Â??¥Âëº??
+    const breathPeriod = 7.0
+    const breathPhase = (t % breathPeriod) / breathPeriod
+    
+    // ‰ΩøÁî®?¥Ëá™?∂Á??ºÂê∏?≤Á?
+    let breathIntensity = 0
+    if (breathPhase < 0.35) { // ?∏Ê∞£
+      const progress = breathPhase / 0.35
+      breathIntensity = 0.5 * (1 - Math.cos(Math.PI * progress))
+    } else if (breathPhase < 0.45) { // ?≠Êö´?úÈ?
+      breathIntensity = 1
+    } else if (breathPhase < 0.8) { // ?ºÊ∞£
+      const progress = (breathPhase - 0.45) / 0.35
+      breathIntensity = 1 - 0.5 * (1 - Math.cos(Math.PI * progress))
+    } else { // ?úÈ?
+      breathIntensity = 0
+    }
+
+    // ‰∏ªÁ?È´îÂ???    const baseScale = 1
+    const scaleVariation = 0.08
+    const currentScale = baseScale + scaleVariation * breathIntensity
+    
+    sphere.scale.setScalar(currentScale)
+    sphere.rotation.y += 0.002
+    sphere.rotation.x = Math.sin(t * 0.3) * 0.1
+    sphere.position.y = Math.sin(t * 0.4) * 0.1
+
+    // ?ßÈÉ®?ÉÈ?
+    innerSphere.scale.setScalar(currentScale * 0.95)
+    innerSphere.rotation.y -= 0.003
+    innerSphere.rotation.z += 0.001
+
+    // Á≤íÂ??ïÁï´
+    const particleMaterial = particles.material as THREE.ShaderMaterial
+    particleMaterial.uniforms.time.value = t
+    particles.rotation.y += 0.001
+    particles.rotation.x = Math.sin(t * 0.2) * 0.05
+
+    // ?âÊ??ïÁï´
+    if (halo1 && halo2 && halo3) {
+      const haloScale = 1 + 0.12 * breathIntensity
+      halo1.scale.setScalar(haloScale * 1.1)
+      halo2.scale.setScalar(haloScale * 1.15)
+      halo3.scale.setScalar(haloScale * 1.2)
+      
+      ;(halo1.material as THREE.MeshBasicMaterial).opacity = 0.15 * breathIntensity
+      ;(halo2.material as THREE.MeshBasicMaterial).opacity = 0.12 * breathIntensity * 0.8
+      ;(halo3.material as THREE.MeshBasicMaterial).opacity = 0.08 * breathIntensity * 0.6
+
+      halo1.rotation.y += 0.001
+      halo2.rotation.y -= 0.0008
+      halo3.rotation.y += 0.0006
+    }
+
+    // ?ïÊ??âÁÖß
+    const lightRadius = 4
+    movingLight.position.set(
+      Math.cos(t * 0.6) * lightRadius,
+      Math.sin(t * 0.8) * 2,
+      3 + Math.sin(t * 0.4) * 1.5
+    )
+    movingLight.intensity = 0.6 + 0.4 * Math.sin(t * 1.2)
+
+    rimLight.intensity = 0.6 + 0.3 * breathIntensity
+
+    // ?∏Ê?ÂæÆÂ?
+    camera.position.x = Math.sin(t * 0.1) * 0.1
+    camera.position.y = Math.cos(t * 0.15) * 0.08
+    camera.lookAt(0, 0, 0)
+
+    renderer.render(scene, camera)
+    raf = requestAnimationFrame(loop)
+  }
+  
+  raf = requestAnimationFrame(loop)
+})
+
+onUnmounted(() => {
+  if (raf) cancelAnimationFrame(raf)
+  window.removeEventListener('resize', () => {})
+  
+  if (renderer) {
+    renderer.dispose()
+    renderer.domElement.remove()
+  }
+  
+  // Ê∏ÖÁ?Ë≥áÊ?
+  scene?.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.geometry.dispose()
+      if (Array.isArray(object.material)) {
+        object.material.forEach(mat => mat.dispose())
+      } else {
+        object.material.dispose()
+      }
+    }
+  })
+})
+</script>
+
+<template>
+  <div class="breathing-sphere-container">
+    <div ref="container" class="sphere-wrapper"></div>
+    <div class="ambient-glow"></div>
+    <div class="reflection-layer"></div>
+  </div>
+</template>
+
+<style scoped>
+.breathing-sphere-container {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.sphere-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(
+    circle at 30% 25%, 
+    rgba(102, 170, 255, 0.15) 0%, 
+    rgba(170, 119, 255, 0.1) 30%,
+    rgba(255, 136, 221, 0.08) 60%,
+    transparent 100%
+  );
+  box-shadow: 
+    inset 0 0 80px rgba(102, 170, 255, 0.1),
+    0 0 60px rgba(102, 170, 255, 0.15),
+    0 0 120px rgba(170, 119, 255, 0.08);
+}
+
+.ambient-glow {
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    rgba(102, 170, 255, 0.12) 0%,
+    rgba(170, 119, 255, 0.08) 40%,
+    rgba(255, 136, 221, 0.05) 70%,
+    transparent 100%
+  );
+  filter: blur(40px);
+  pointer-events: none;
+  animation: pulse 7s ease-in-out infinite;
+}
+
+.reflection-layer {
+  position: absolute;
+  inset: 15%;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.1) 30%,
+    transparent 70%
+  );
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  35% { 
+    opacity: 1;
+    transform: scale(1.05);
+  }
