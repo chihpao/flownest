@@ -2,6 +2,8 @@
 import { ref, computed } from 'vue'
 import TimePill from '@/components/TimePill.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
+import BgmControl from '@/components/BgmControl.vue'
+import { useBgm } from '@/components/useBgm'
 const choices = [30, 45, 60]
 const selected = ref<number | null>(null)
 const handleSelect = (m: number) => { selected.value = m }
@@ -17,10 +19,19 @@ const effective = computed<number | null>(() => {
   if (isCustomValid.value) return customNumber.value
   return selected.value ?? null
 })
+
+// Ensure audio starts under direct user gesture when pressing Start
+const { play: playBgm } = useBgm()
+const onStartClick = () => {
+  try { playBgm() } catch {}
+}
 </script>
 
 <template>
-  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-white to-blue-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-white to-blue-50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] relative">
+    <div class="absolute top-4 right-4 z-20">
+      <BgmControl />
+    </div>
     <section class="w-full max-w-[520px] space-y-6 sm:space-y-8">
       <header class="space-y-1.5 sm:space-y-2 text-center">
         <h2 class="text-2xl md:text-3xl font-semibold tracking-wide">Choose Focus Time</h2>
@@ -56,6 +67,7 @@ const effective = computed<number | null>(() => {
           label="Start"
           :disabled="!effective"
           :to="effective ? { path: '/timer', query: { m: effective } } : undefined"
+          @click="onStartClick"
         />
         <p class="mt-2 text-center text-sm text-gray-500 leading-relaxed tracking-wide">
           <span v-if="!effective">Select or enter minutes to continue</span>

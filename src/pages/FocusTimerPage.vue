@@ -3,9 +3,14 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCountdown } from '@/components/useCountdown'
 import ThreeBreathingSphere from '@/components/ThreeBreathingSphere.vue'
+import BgmControl from '@/components/BgmControl.vue'
+import { useBgm } from '@/components/useBgm'
 
 const route = useRoute()
 const router = useRouter()
+
+// Background music control handled in code (no manual URL input)
+const { play: playBgm, pause: pauseBgm } = useBgm()
 
 // 從路由參數獲取分鐘數，預設為25分鐘
 const minutes = ref(route.query.m ? Number(route.query.m) : 25)
@@ -22,6 +27,7 @@ const {
 } = useCountdown({
   initialMinutes: minutes.value,
   onComplete: () => {
+    try { pauseBgm() } catch {}
     router.push({ path: '/done', query: { m: minutes.value } })
   }
 })
@@ -37,16 +43,21 @@ onMounted(() => {
   }
   // 自動開始計時
   startTimer(minutes.value)
+  try { playBgm() } catch {}
 })
 
 function handleStop() {
   stopTimer()
+  try { pauseBgm() } catch {}
   router.push({ path: '/done', query: { m: Math.ceil(remaining.value/60) } })
 }
 </script>
 
 <template>
-  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-slate-50 to-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+  <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-slate-50 to-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] relative">
+    <div class="absolute top-4 right-4 z-20">
+      <BgmControl />
+    </div>
     <div class="w-full max-w-[420px] space-y-8 text-center">
       <!-- 計時器顯示 -->
       <div class="grid place-items-center">
@@ -60,13 +71,8 @@ function handleStop() {
       <!-- 呼吸球體 -->
       <div class="relative w-full max-w-[320px] mx-auto aspect-square">
         <div class="absolute inset-0 flex items-center justify-center">
-          <div class="relative w-full h-full max-w-[280px] max-h-[280px] m-auto">
-            <ThreeBreathingSphere 
-              :is-running="running" 
-              :progress="progress"
-              :breath-intensity="running ? 0.8 : 0.3"
-              class="w-full h-full"
-            />
+          <div class="relative w-full h-full max-w-[280px] max-h-[280px] m-auto rounded-full overflow-hidden isolate">
+            <ThreeBreathingSphere class="w-full h-full" />
             <div class="progress-ring" :style="{ '--progress': (progress*360) + 'deg' }" />
           </div>
         </div>
@@ -95,6 +101,8 @@ function handleStop() {
   transform: translateZ(0);
   backface-visibility: hidden;
   transform-style: preserve-3d;
+  border-radius: 9999px;  
+  overflow: hidden;     
 }
 
 .progress-ring::before,

@@ -1,26 +1,9 @@
+<!-- cspell:ignore highp mediump metalness clearcoat hemi -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import * as THREE from 'three'
-import { useCountdown } from './useCountdown'
 
 const container = ref<HTMLDivElement | null>(null)
-
-const props = defineProps({
-  // 計時器相關屬性
-  isRunning: {
-    type: Boolean,
-    default: false
-  },
-  progress: {
-    type: Number,
-    default: 1
-  },
-  // 呼吸動畫強度 (0-1)
-  breathIntensity: {
-    type: Number,
-    default: 0
-  }
-})
 
 // three.js 物件
 let renderer: THREE.WebGLRenderer | null = null
@@ -37,7 +20,6 @@ let cosmicDust: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null 
 // 動畫控制
 let raf = 0
 let startTime = 0
-let currentBreathIntensity = 0
 
 // 滑鼠互動（容器座標轉 -1~1）
 const mousePos = { x: 0, y: 0 }
@@ -69,7 +51,33 @@ function handleResize () {
   camera.updateProjectionMatrix()
 }
 
-/** 建立漂浮粒子（發光綠色） */
+/** 產生圓形 Alpha 紋理（給 PointsMaterial 當 alphaMap） */
+function makeCircleAlphaTexture(size = 64): THREE.Texture {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.clearRect(0, 0, size, size)
+
+  const r = size / 2
+  const g = ctx.createRadialGradient(r, r, 0, r, r, r)
+  // 中央亮、邊緣透明：柔和發光效果
+  g.addColorStop(0.0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.5, 'rgba(255,255,255,0.7)')
+  g.addColorStop(1.0, 'rgba(255,255,255,0)')
+
+  ctx.fillStyle = g
+  ctx.beginPath()
+  ctx.arc(r, r, r, 0, Math.PI * 2)
+  ctx.fill()
+
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping
+  tex.minFilter = THREE.LinearFilter
+  tex.magFilter = THREE.LinearFilter
+  return tex
+}
+
+/** 漂浮粒子（發光綠色；用自訂 Shader 畫圓點） */
 function createFloatingParticles(sceneRef: THREE.Scene) {
   const COUNT = 1200 // 中等密度
   const positions = new Float32Array(COUNT * 3)
@@ -87,7 +95,7 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
     positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta)
     positions[i3 + 2] = radius * Math.cos(phi)
 
-    // 綠色主調（H≈0.33），S/L 略抖動
+    // 綠色主調（H≈0.33）
     const h = 0.33 + (Math.random() - 0.5) * 0.05
     const s = 0.7 + Math.random() * 0.2
     const l = 0.5 + Math.random() * 0.2
@@ -127,24 +135,20 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
         vColor = color;
         vec3 pos = position;
 
-        // 呼吸縮放（讓粒子場跟著一起「擴張/收縮」）
         float breathScale = 1.0 + breathPhase * 0.25;
         pos *= breathScale;
 
-        // 漂浮擾動（每顆粒子帶隨機相位）
         pos.x += sin(time * 0.45 + random * 10.0) * 0.18;
         pos.y += cos(time * 0.60 + random * 15.0) * 0.14;
         pos.z += sin(time * 0.30 + random *  8.0) * 0.10;
 
-        // 滑鼠影響（越靠近原點越明顯）
         float m = length(mouseInfluence);
         pos.xy += mouseInfluence * 0.25 * exp(-m * 2.0);
 
         vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-        gl_PointSize = size * (380.0 / -mv.z); // 透視縮放
+        gl_PointSize = size * (380.0 / -mv.z);
         gl_Position = projectionMatrix * mv;
 
-        // 呼吸亮度
         float pulse = sin(time * 2.0 + random * 20.0) * 0.5 + 0.5;
         float b = breathPhase * 0.6 + 0.2;
         vAlpha = b * (0.30 + pulse * 0.50);
@@ -156,7 +160,6 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
       varying float vAlpha;
 
       void main() {
-        // 將點精靈畫成圓，邊緣柔化 + 內發光
         vec2 c = gl_PointCoord - vec2(0.5);
         float d = length(c);
         if (d > 0.5) discard;
@@ -177,7 +180,7 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
   sceneRef.add(floatingParticles)
 }
 
-/** 建立星塵（淡綠、較遠、輕微發光） */
+/** 星塵（淡綠、用 PointsMaterial + 圓形 alphaMap，避免方塊） */
 function createCosmicDust(sceneRef: THREE.Scene) {
   const COUNT = 800
   const positions = new Float32Array(COUNT * 3)
@@ -193,7 +196,6 @@ function createCosmicDust(sceneRef: THREE.Scene) {
     positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta)
     positions[i3 + 2] = radius * Math.cos(phi)
 
-    // 更淡的綠
     const c = new THREE.Color().setHSL(0.33, 0.55, 0.6 + Math.random() * 0.2)
     colors[i3] = c.r
     colors[i3 + 1] = c.g
@@ -204,13 +206,16 @@ function createCosmicDust(sceneRef: THREE.Scene) {
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
 
+  const alphaTex = makeCircleAlphaTexture(64)
   const mat = new THREE.PointsMaterial({
     size: 1.6,
     transparent: true,
-    opacity: 0.25,
+    opacity: 0.28,
     blending: THREE.AdditiveBlending,
     vertexColors: true,
-    sizeAttenuation: true
+    sizeAttenuation: true,
+    alphaMap: alphaTex,
+    depthWrite: false
   })
 
   cosmicDust = new THREE.Points(geo, mat)
@@ -238,6 +243,10 @@ onMounted(() => {
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.2
   renderer.outputColorSpace = THREE.SRGBColorSpace
+
+  // 讓 three.js 的 <canvas> 也跟著圓角 + 填滿容器（修掉方形外露）
+  renderer.domElement.className = 'w-full h-full rounded-full block'
+
   el.appendChild(renderer.domElement)
 
   // Scene & Camera
@@ -261,7 +270,7 @@ onMounted(() => {
   mainSphere.receiveShadow = false
   scene.add(mainSphere)
 
-  // 燈光
+  // 燈光（偏綠）
   const ambient = new THREE.AmbientLight(0x1a2a1a, 0.4)
   scene.add(ambient)
 
@@ -294,41 +303,40 @@ onMounted(() => {
   el.addEventListener('mousemove', handleMouseMove)
   window.addEventListener('resize', handleResize)
 
-  // 監聽呼吸強度變化
-  watch(() => props.breathIntensity, (newVal) => {
-    currentBreathIntensity = newVal
-  })
-
-  // 動畫循環系統
+  // 動畫
   startTime = performance.now()
+
   const loop = () => {
+    if (!renderer || !scene || !camera || !mainSphere || !breathingLight || !zenLight) return
     const t = (performance.now() - startTime) / 1000
-    
-    // 使用傳入的呼吸強度或默認動畫
-    const breathIntensity = props.breathIntensity >= 0 
-      ? currentBreathIntensity 
-      : Math.sin(t * 0.5) * 0.5 + 0.5 // 默認呼吸動畫
 
-    // 根據運行狀態調整動畫速度
-    const animationSpeed = props.isRunning ? 1.5 : 0.8
-
-    // 主球動作
-    if (mainSphere) {
-      const baseScale = 1
-      const scaleRange = 0.12
-      const currentScale = baseScale + scaleRange * breathIntensity
-      mainSphere.scale.setScalar(currentScale)
-      mainSphere.rotation.y += 0.001
-      mainSphere.rotation.x = Math.sin(t * 0.2) * 0.05
-      mainSphere.position.y = Math.sin(t * 0.15) * 0.08
-
-      // 主球色相微動
-      const hue = 0.33 + Math.sin(t * 0.06) * 0.05 // 向綠靠攏
-      const material = mainSphere.material as THREE.MeshPhysicalMaterial
-      material.color.setHSL(hue, 0.7, 0.55)
+    // 8 秒呼吸循環
+    const breathCycle = 8.0
+    const phase = (t % breathCycle) / breathCycle
+    let breathIntensity = 0.0
+    if (phase < 0.4) {
+      const p = phase / 0.4
+      breathIntensity = 0.5 * (1.0 - Math.cos(Math.PI * p))
+    } else if (phase < 0.5) {
+      breathIntensity = 1.0
+    } else if (phase < 0.9) {
+      const p = (phase - 0.5) / 0.4
+      breathIntensity = 1.0 - 0.5 * (1.0 - Math.cos(Math.PI * p))
+    } else {
+      breathIntensity = 0.0
     }
 
-    // 粒子 uniforms 更新 + 微旋轉
+    // 主球
+    const currentScale = 1 + 0.12 * breathIntensity
+    mainSphere.scale.setScalar(currentScale)
+    mainSphere.rotation.y += 0.001
+    mainSphere.rotation.x = Math.sin(t * 0.2) * 0.05
+    mainSphere.position.y = Math.sin(t * 0.15) * 0.08
+
+    const hue = 0.33 + Math.sin(t * 0.06) * 0.05
+    mainSphere.material.color.setHSL(hue, 0.7, 0.55)
+
+    // 粒子 uniforms + 旋轉
     if (floatingParticles) {
       const mat = floatingParticles.material
       if (mat.uniforms?.time) {
@@ -340,50 +348,41 @@ onMounted(() => {
       floatingParticles.rotation.x = Math.sin(t * 0.1) * 0.02
     }
 
-    // 星塵微旋
+    // 星塵
     if (cosmicDust) {
       cosmicDust.rotation.y += 0.00015
       cosmicDust.rotation.x += 0.00010
-      ;(cosmicDust.material as THREE.PointsMaterial).opacity = 0.20 + breathIntensity * 0.10
+      ;(cosmicDust.material as THREE.PointsMaterial).opacity = 0.22 + breathIntensity * 0.10
     }
 
-    // 燈光流動（綠色系）
-    if (breathingLight) {
-      const lightRadius = 5 + Math.sin(t * 0.3)
-      breathingLight.position.set(
-        Math.cos(t * 0.4) * lightRadius,
-        Math.sin(t * 0.6) * 3,
-        4 + Math.sin(t * 0.2) * 2
-      )
-      breathingLight.intensity = 0.75 + breathIntensity * 0.65
-      breathingLight.color.setHSL(0.35 + Math.sin(t * 0.5) * 0.04, 0.9, 0.6)
-    }
+    // 燈光（綠色系）
+    const lightRadius = 5 + Math.sin(t * 0.3)
+    breathingLight.position.set(
+      Math.cos(t * 0.4) * lightRadius,
+      Math.sin(t * 0.6) * 3,
+      4 + Math.sin(t * 0.2) * 2
+    )
+    breathingLight.intensity = 0.75 + breathIntensity * 0.65
+    breathingLight.color.setHSL(0.35 + Math.sin(t * 0.5) * 0.04, 0.9, 0.6)
 
-    if (zenLight) {
-      zenLight.position.set(
-        -Math.cos(t * 0.35) * 6,
-        Math.cos(t * 0.25) * 2,
-        -3 + Math.cos(t * 0.4) * 1.5
-      )
-      zenLight.intensity = 0.55 + breathIntensity * 0.45
-      zenLight.color.setHSL(0.42 + Math.cos(t * 0.3) * 0.06, 0.8, 0.7)
-    }
+    zenLight.position.set(
+      -Math.cos(t * 0.35) * 6,
+      Math.cos(t * 0.25) * 2,
+      -3 + Math.cos(t * 0.4) * 1.5
+    )
+    zenLight.intensity = 0.55 + breathIntensity * 0.45
+    zenLight.color.setHSL(0.42 + Math.cos(t * 0.3) * 0.06, 0.8, 0.7)
 
     // 相機微搖 + 滑鼠跟隨
-    if (camera) {
-      camera.position.x = Math.sin(t * 0.08) * 0.15 + mousePos.x * 0.1
-      camera.position.y = Math.cos(t * 0.06) * 0.12 + mousePos.y * 0.08
-      camera.position.z = 9 + Math.sin(t * 0.05) * 0.1
-      camera.lookAt(0, 0, 0)
-    }
+    camera.position.x = Math.sin(t * 0.08) * 0.15 + mousePos.x * 0.1
+    camera.position.y = Math.cos(t * 0.06) * 0.12 + mousePos.y * 0.08
+    camera.position.z = 9 + Math.sin(t * 0.05) * 0.1
+    camera.lookAt(0, 0, 0)
 
-    if (renderer && scene && camera) {
-      renderer.render(scene, camera)
-    }
+    renderer.render(scene, camera)
     raf = requestAnimationFrame(loop)
   }
 
-  // 初始化尺寸並啟動
   handleResize()
   raf = requestAnimationFrame(loop)
 })
@@ -403,19 +402,13 @@ onUnmounted(() => {
     renderer = null
   }
 
-  // 釋放幾何與材質
   if (scene) {
     scene.traverse((obj) => {
       const anyObj = obj as any
-      if (anyObj.geometry && anyObj.geometry.dispose) {
-        anyObj.geometry.dispose()
-      }
+      if (anyObj.geometry && anyObj.geometry.dispose) anyObj.geometry.dispose()
       const mat = anyObj.material
-      if (Array.isArray(mat)) {
-        mat.forEach((m: any) => m && m.dispose && m.dispose())
-      } else if (mat && mat.dispose) {
-        mat.dispose()
-      }
+      if (Array.isArray(mat)) mat.forEach((m: any) => m && m.dispose && m.dispose())
+      else if (mat && mat.dispose) mat.dispose()
     })
   }
 
@@ -430,7 +423,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- 外層容器（原子類） -->
+  <!-- 外層容器（純 Tailwind 原子類） -->
   <div
     class="relative mx-auto aspect-square max-w-[550px] rounded-full overflow-hidden bg-transparent z-[2]
            dark:bg-[radial-gradient(circle_at_center,#050510_0%,#000008_100%)]"
