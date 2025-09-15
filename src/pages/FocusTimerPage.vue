@@ -1,72 +1,85 @@
 <script setup lang="ts">
-import { onMounted, ref, watch, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCountdown } from '@/components/useCountdown'
 import ThreeBreathingSphere from '@/components/ThreeBreathingSphere.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { remaining, start, stop, fmt, running } = useCountdown()
-const minutes = ref(30)
-const total = computed(() => minutes.value * 60)
-const progress = computed(() => {
-  const t = total.value
-  if (!t) return 0
-  const p = 1 - remaining.value / t
-  return Math.min(1, Math.max(0, p))
-})
 
-onMounted(() => {
-  const m = Math.max(1, Number(route.query.m ?? 30))
-  minutes.value = m
-  start(m * 60)
-})
+// 從路由參數獲取分鐘數，預設為25分鐘
+const minutes = ref(route.query.m ? Number(route.query.m) : 25)
 
-function handleStop() {
-  stop()
-  router.push({ path: '/done', query: { m: Math.ceil(remaining.value/60) } })
-}
-
-// Auto-finish: when countdown hits 0, go to Done
-watch(remaining, (now, prev) => {
-  if (prev > 0 && now <= 0) {
+// 使用改進的 useCountdown
+const { 
+  remaining, 
+  running, 
+  progress, 
+  formattedTime: countdownTime,
+  start: startTimer, 
+  stop: stopTimer,
+  setTime
+} = useCountdown({
+  initialMinutes: minutes.value,
+  onComplete: () => {
     router.push({ path: '/done', query: { m: minutes.value } })
   }
 })
+
+// 監聽路由參數變化並開始計時
+onMounted(() => {
+  if (route.query.m) {
+    const m = Number(route.query.m)
+    if (!isNaN(m) && m > 0) {
+      minutes.value = m
+      setTime(m)
+    }
+  }
+  // 自動開始計時
+  startTimer(minutes.value)
+})
+
+function handleStop() {
+  stopTimer()
+  router.push({ path: '/done', query: { m: Math.ceil(remaining.value/60) } })
+}
 </script>
 
 <template>
   <main class="min-h-screen grid place-items-center p-6 bg-gradient-to-b from-slate-50 to-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-    <section class="w-full max-w-[560px] space-y-6 sm:space-y-8 text-center">
-      <header class="space-y-1">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Stay Focused</p>
-      </header>
-
-      <!-- Timer Display -->
-      <div class="mx-auto w-full max-w-[340px] sm:max-w-[420px]">
-        <!-- Time Above the Sphere -->
-        <div class="mb-3 sm:mb-4 grid place-items-center">
-          <div class="px-3.5 py-1.5 rounded-full bg-white/70 backdrop-blur-sm shadow-sm border border-white/60">
-            <div class="text-3xl md:text-4xl font-semibold tabular-nums tracking-wide select-none text-slate-900">
-              {{ fmt() }}
-            </div>
+    <div class="w-full max-w-[420px] space-y-8 text-center">
+      <!-- 計時器顯示 -->
+      <div class="grid place-items-center">
+        <div class="px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm shadow-sm border border-white/60">
+          <div class="text-6xl md:text-7xl font-mono font-bold tabular-nums tracking-wide text-slate-900">
+            {{ countdownTime }}
           </div>
         </div>
-        <!-- Sphere + Progress -->
-        <div class="relative">
-          <ThreeBreathingSphere />
-          <div class="progress-ring" :style="{ '--progress': (progress*360) + 'deg' }"></div>
+      </div>
+      
+      <!-- 呼吸球體 -->
+      <div class="relative w-full max-w-[320px] mx-auto aspect-square">
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="relative w-full h-full max-w-[280px] max-h-[280px] m-auto">
+            <ThreeBreathingSphere 
+              :is-running="running" 
+              :progress="progress"
+              :breath-intensity="running ? 0.8 : 0.3"
+              class="w-full h-full"
+            />
+            <div class="progress-ring" :style="{ '--progress': (progress*360) + 'deg' }" />
+          </div>
         </div>
       </div>
 
-      <!-- Stop -->
-      <button @click="handleStop"
-        class="stop-btn relative z-10 mx-auto px-6 py-3 rounded-full bg-gradient-to-r from-rose-500 to-rose-600 text-white font-semibold shadow hover:brightness-110 hover:shadow-md active:scale-[0.99] transition ring-1 ring-rose-300/40 select-none">
+      <!-- Stop 按鈕 -->
+      <button 
+        @click="handleStop"
+        class="mx-auto px-8 py-3 text-lg rounded-full bg-gradient-to-r from-rose-500 to-rose-600 text-white font-semibold shadow-lg hover:brightness-110 hover:shadow-xl active:scale-[0.98] transition-all duration-200 ring-1 ring-rose-300/40"
+      >
         STOP
       </button>
-
-      <p v-if="!running" class="text-gray-500 leading-relaxed tracking-wide">Paused</p>
-    </section>
+    </div>
   </main>
 </template>
 
@@ -75,34 +88,56 @@ watch(remaining, (now, prev) => {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
+  z-index: 1;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
 }
 
-.progress-ring::before {
-  content: '';
-  position: absolute;
-  inset: -10px;
-  border-radius: 9999px;
-  background:
-    conic-gradient(from -90deg, rgba(99,102,241,0.2) 0deg, rgba(99,102,241,0.2) var(--progress), rgba(148,163,184,0.12) var(--progress));
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 0);
-  mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 0);
-  filter: saturate(1.05);
-  z-index: 5;
-}
-
+.progress-ring::before,
 .progress-ring::after {
   content: '';
   position: absolute;
-  inset: -18px;
-  border-radius: 9999px;
-  background:
-    radial-gradient(40% 40% at 50% 30%, rgba(138,180,255,0.24), rgba(255,255,255,0) 70%),
-    radial-gradient(50% 50% at 70% 70%, rgba(255,170,210,0.12), rgba(255,255,255,0) 72%);
-  filter: blur(14px) saturate(1.02);
+  border-radius: 50%;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+.progress-ring::before {
+  top: -6px;
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  background: conic-gradient(
+    from -90deg, 
+    rgba(16, 185, 129, 0.5) 0deg, 
+    rgba(16, 185, 129, 0.5) var(--progress), 
+    rgba(209, 250, 229, 0.1) var(--progress)
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.3));
   z-index: 1;
+  transition: all 0.3s ease-out;
+}
+
+.progress-ring::after {
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
+  background: radial-gradient(
+    40% 40% at 50% 50%, 
+    rgba(16, 185, 129, 0.15), 
+    rgba(255, 255, 255, 0) 70%
+  );
+  filter: blur(8px);
+  z-index: 0;
+  opacity: 0.8;
 }
 .stop-btn { color: #fff !important; }
 .stop-btn:disabled { color: rgba(255,255,255,0.75) !important; }

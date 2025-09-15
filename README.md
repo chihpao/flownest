@@ -36,7 +36,7 @@ npm run dev
 npm run build
 ```
 
-### 預覽打包產物
+### 預覽打包
 
 ```bash
 npm run preview
@@ -44,7 +44,7 @@ npm run preview
 
 ## 頁面與路由
 
-* `/`：Welcome（標題＋插圖＋進入）
+* `/`：標題＋插圖＋進入
 * `/setup`：選擇專注時間（預設 + 自訂）
 * `/timer`：倒數頁（上方時間、中間呼吸球、外圈進度環）
 * `/done`：完成頁（顯示完成分鐘數、返回）
