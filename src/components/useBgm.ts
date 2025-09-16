@@ -3,9 +3,21 @@ import { ref, computed, onUnmounted } from 'vue'
 // Simple global singleton audio so playback persists across routes
 let audio: HTMLAudioElement | null = null
 
+// Known good public radio streams (CORS-enabled)
+const DEFAULT_SOURCES = [
+  // Nightride streams have been stable and friendly to localhost testing
+  'https://stream.nightride.fm/lofi.mp3',
+  'https://stream.nightride.fm/jazzhop.mp3',
+  'https://stream.nightride.fm/chillsynth.mp3',
+  // SomaFM provides nice ambient backups but may rate-limit; keep as later fallbacks
+  'https://ice1.somafm.com/groovesalad-128-mp3',
+  'https://ice2.somafm.com/lush-128-mp3',
+]
+
 const ENABLED_KEY = 'bgm:enabled'
 const VOLUME_KEY = 'bgm:volume'
 const SRC_KEY = 'bgm:src'
+
 
 function getDefaultEnabled() {
   try {
@@ -29,9 +41,9 @@ function getDefaultVolume() {
 function getDefaultSrc() {
   try {
     const v = localStorage.getItem(SRC_KEY)
-    return v || 'https://stream.nightride.fm/lofi.ogg'
+    return v || DEFAULT_SOURCES[0]
   } catch {
-    return 'https://stream.nightride.fm/lofi.ogg'
+    return DEFAULT_SOURCES[0]
   }
 }
 
@@ -39,11 +51,13 @@ function ensureAudio() {
   if (audio) return audio
   // Default remote lofi stream (can be overridden via setSource)
   const src = getDefaultSrc()
-  audio = new Audio(src)
-  audio.loop = true
-  audio.preload = 'none'
-  audio.crossOrigin = 'anonymous'
-  audio.volume = getDefaultVolume()
+  const element = new Audio()
+  element.loop = true
+  element.preload = 'none'
+  element.crossOrigin = 'anonymous'
+  element.src = src
+  element.volume = getDefaultVolume()
+  audio = element
   return audio
 }
 
@@ -54,10 +68,14 @@ export function useBgm() {
   const source = ref<string>('')
   let retryCount = 0
   const maxRetries = 3
+  let fallbackIndex = 0
 
   const a = ensureAudio()
   a.volume = volume.value
   source.value = a.src
+  // Track which default URL we started on
+  const startIdx = DEFAULT_SOURCES.findIndex(u => a.src.includes(u))
+  if (startIdx >= 0) fallbackIndex = startIdx
 
   const canAutoplay = computed(() => enabled.value)
 
@@ -107,6 +125,8 @@ export function useBgm() {
     audio.pause()
     audio.src = url
     source.value = url
+    const idx = DEFAULT_SOURCES.findIndex(u => u === url)
+    if (idx >= 0) fallbackIndex = idx
     // Some streams need load() to start buffering
     audio.load()
     if (wasPlaying || enabled.value) {
@@ -118,9 +138,30 @@ export function useBgm() {
   const onPlay = () => { isPlaying.value = true }
   const onPause = () => { isPlaying.value = false }
   const onPlaying = () => { retryCount = 0 }
-  const onErrorOrStalled = () => {
+  const onErrorOrStalled = async () => {
     if (!audio) return
-    if (retryCount >= maxRetries) return
+    // If too many retries on current URL, advance to next known fallback
+    if (retryCount >= maxRetries) {
+      // Only auto-advance if user hasn't explicitly chosen a custom URL
+      const saved = (() => { try { return localStorage.getItem(SRC_KEY) } catch { return null } })()
+      const isCustom = !!saved && !DEFAULT_SOURCES.includes(saved)
+      if (!isCustom) {
+        const current = audio.src
+        // Find current index within defaults (if any)
+        const currentIdx = DEFAULT_SOURCES.findIndex(u => current.includes(u))
+        fallbackIndex = currentIdx >= 0 ? currentIdx + 1 : fallbackIndex + 1
+        if (fallbackIndex < DEFAULT_SOURCES.length) {
+          const nextUrl = DEFAULT_SOURCES[fallbackIndex]
+          // Switch source and attempt play
+          await setSource(nextUrl)
+          retryCount = 0
+          return
+        }
+      }
+      // No more fallbacks or custom URL set: stop retrying
+      return
+    }
+
     const delay = (retryCount + 1) * 2000
     const url = audio.src
     setTimeout(async () => {

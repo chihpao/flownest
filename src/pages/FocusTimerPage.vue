@@ -32,7 +32,7 @@ const {
   }
 })
 
-// 監聽路由參數變化並開始計時
+// 監聽路由參數變化
 onMounted(() => {
   if (route.query.m) {
     const m = Number(route.query.m)
@@ -41,9 +41,8 @@ onMounted(() => {
       setTime(m)
     }
   }
-  // 自動開始計時
+  // 開始計時
   startTimer(minutes.value)
-  try { playBgm() } catch {}
 })
 
 function handleStop() {
@@ -61,12 +60,21 @@ function handleStop() {
     <div class="w-full max-w-[420px] space-y-8 text-center">
       <!-- 計時器顯示 -->
       <div class="grid place-items-center">
-        <div class="px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm shadow-sm border border-white/60">
-          <div class="text-6xl md:text-7xl font-mono font-bold tabular-nums tracking-wide text-slate-900">
+        <button
+        type="button"
+        class="relative inline-flex items-center justify-center select-none
+              px-3 py-1.5 md:px-4 md:py-2 rounded-2xl
+              ring-1 ring-transparent
+              transition-all duration-200 motion-reduce:transition-none
+              hover:ring-slate-300/60 hover:shadow-md hover:bg-white/30 hover:backdrop-blur-sm
+              active:ring-slate-300/60 active:bg-white/30
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70">
+          <span class="text-6xl md:text-7xl font-mono font-bold tabular-nums tracking-wide text-slate-900">
             {{ countdownTime }}
-          </div>
-        </div>
+          </span>
+        </button>
       </div>
+
       
       <!-- 呼吸球體 -->
       <div class="relative w-full max-w-[320px] mx-auto aspect-square">

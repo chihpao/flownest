@@ -122,11 +122,15 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
     },
     vertexShader: `
       precision highp float;
+      precision highp int;
+      
       attribute float size;
       attribute vec3 color;
       attribute float random;
+      
       varying vec3 vColor;
       varying float vAlpha;
+      
       uniform float time;
       uniform float breathPhase;
       uniform vec2 mouseInfluence;
@@ -155,7 +159,9 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
       }
     `,
     fragmentShader: `
-      precision mediump float;
+      precision highp float;
+      precision highp int;
+      
       varying vec3 vColor;
       varying float vAlpha;
 
@@ -172,7 +178,6 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
     `,
     transparent: true,
     blending: THREE.AdditiveBlending,
-    vertexColors: true,
     depthWrite: false
   })
 
