@@ -79,12 +79,29 @@ function handleStop() {
       <!-- 呼吸球體 -->
       <div class="relative w-full max-w-[320px] mx-auto aspect-square">
         <div class="absolute inset-0 flex items-center justify-center">
+          <!-- 這一層只放 3D 球；保留圓角裁切 -->
           <div class="relative w-full h-full max-w-[280px] max-h-[280px] m-auto rounded-full overflow-hidden isolate">
-            <ThreeBreathingSphere class="w-full h-full" />
-            <div class="progress-ring" :style="{ '--progress': (progress*360) + 'deg' }" />
+            <ThreeBreathingSphere class="absolute inset-0 w-full h-full" />
           </div>
+
+          <!-- 把進度環放到外一層（避免 overflow-hidden 截到） -->
+          <svg class="pointer-events-none absolute w-[280px] h-[280px]" viewBox="0 0 100 100">
+            <!-- 底線 -->
+            <circle cx="50" cy="50" r="47" fill="none"
+                    stroke="rgba(148,163,184,.25)" stroke-width="2" />
+            <!-- 進度線 -->
+            <circle cx="50" cy="50" r="47" fill="none"
+                    stroke="#34d399" stroke-width="2" stroke-linecap="round" pathLength="100"
+                    :style="{
+                      strokeDasharray: 100,
+                      strokeDashoffset: 100 - (progress * 100),
+                      transform: 'rotate(-90deg)',
+                      transformOrigin: '50% 50%'
+                    }" />
+          </svg>
         </div>
       </div>
+
 
       <!-- Stop 按鈕 -->
       <button 

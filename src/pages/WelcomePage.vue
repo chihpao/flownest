@@ -1,30 +1,62 @@
+<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+import hero from '@/assets/hero.svg';
+import BackgroundWaves from '@/components/BackgroundWaves.vue';
+</script>
+
 <template>
-  <main class="min-h-[100dvh] flex flex-col items-center p-6 bg-gradient-to-b from-blue-50 to-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-    <!-- Top spacer for even vertical distribution -->
-    <div class="flex-1" aria-hidden="true"></div>
-    <section class="w-full max-w-[520px] text-center flex flex-col items-center gap-6 sm:gap-8 py-4 sm:py-6">
-      <!-- Title + Subtitle moved to top -->
-      <header class="space-y-2 sm:space-y-3 w-full">
-        <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold tracking-wide">
+  <div class="relative min-h-screen w-full overflow-hidden">
+    <!-- 背景效果 -->
+    <div class="fixed inset-0 -z-10">
+      <BackgroundWaves />
+    </div>
+    
+    <!-- 內容區塊 -->
+    <main class="relative min-h-screen flex flex-col items-center p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      <div class="flex-1 w-full max-w-4xl flex flex-col items-center justify-center">
+      <!-- 標題區 -->
+      <header class="text-center mb-0">
+        <h1 class="text-5xl md:text-6xl font-bold tracking-tight mb-4">
           <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">FlowNest</span>
         </h1>
-        <p class="text-gray-600 leading-relaxed tracking-wide">
-          Enter your flow, stay focused
+        <p class="text-lg text-gray-600 max-w-md mx-auto">
+          進入你的心流，保持專注
         </p>
       </header>
 
-      <!-- Insert your SVG illustration between text and button -->
-      <img :src="hero" alt="Focus illustration" class="w-56 sm:w-72 md:w-80 h-auto select-none pointer-events-none" />
+      <!-- 主要插圖 -->
+      <div class="relative w-full max-w-2xl aspect-square mb-12">
+        <img 
+          :src="hero" 
+          alt="Focus illustration" 
+          class="w-full h-full object-contain"
+          draggable="false"
+        />
+      </div>
+      
 
-      <PrimaryButton label="Get Started" to="/setup" />
-
-      <p class="text-xs text-gray-400">A lightweight focus timer</p>
-    </section>
-    <!-- Bottom spacer for even vertical distribution -->
-    <div class="flex-1" aria-hidden="true"></div>
-  </main>
+      <!-- 按鈕區 -->
+      <div class="flex flex-col sm:flex-row gap-4 mt-">
+        <router-link 
+          to="/setup"
+          class="px-8 py-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+        >
+          開始
+        </router-link>
+      </div>
+      </div>
+    </main>
+  </div>
 </template>
-<script setup lang="ts">
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import hero from '@/assets/hero.svg'
-</script>
+
+<style scoped>
+/* 確保背景層在內容層下方 */
+:deep(canvas) {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+</style>

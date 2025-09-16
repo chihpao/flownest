@@ -173,7 +173,7 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
         float glow = exp(-d * 8.0);
         vec3 color = vColor * (0.6 + glow * 0.8);
         float alpha = vAlpha * (0.65 + glow * 0.35);
-        gl_FragColor = vec4(color, alpha);
+        gl_FragColor = vec4(color, alpha * 0.8);
       }
     `,
     transparent: true,
@@ -215,7 +215,7 @@ function createCosmicDust(sceneRef: THREE.Scene) {
   const mat = new THREE.PointsMaterial({
     size: 1.6,
     transparent: true,
-    opacity: 0.28,
+    opacity: 0.18,
     blending: THREE.AdditiveBlending,
     vertexColors: true,
     sizeAttenuation: true,
@@ -263,9 +263,9 @@ onMounted(() => {
   const sphereGeo = new THREE.SphereGeometry(2.4, 64, 64)
   const sphereMat = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(0x6ea8ff),
-    roughness: 0.35,
-    metalness: 0.1,
-    clearcoat: 0.5,
+    roughness: 0.2,
+    metalness: 0.4,
+    clearcoat: 1.0,
     transmission: 0,
     emissive: new THREE.Color(0x0f2238),
     emissiveIntensity: 0.25
@@ -282,7 +282,7 @@ onMounted(() => {
   const hemi = new THREE.HemisphereLight(0x44ff88, 0x224422, 0.45)
   scene.add(hemi)
 
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.25)
+  const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.7)
   keyLight.position.set(6, 8, 6)
   keyLight.castShadow = true
   keyLight.shadow.mapSize.setScalar(1024)
@@ -429,12 +429,13 @@ onUnmounted(() => {
 
 <template>
   <!-- 外層容器（純 Tailwind 原子類） -->
-  <div
-    class="relative mx-auto aspect-square max-w-[550px] rounded-full overflow-hidden bg-transparent z-[2]
-           dark:bg-[radial-gradient(circle_at_center,#050510_0%,#000008_100%)]"
-  >
-    <div ref="container" class="relative w-full h-full rounded-full overflow-hidden z-10
-                               shadow-[inset_0_0_120px_rgba(102,170,255,0.25),0_0_80px_rgba(102,170,255,0.3),0_0_160px_rgba(170,119,255,0.2),0_0_240px_rgba(255,136,221,0.15)]">
-    </div>
+  <div class="relative mx-auto aspect-square max-w-[550px] rounded-full overflow-hidden 
+            bg-[radial-gradient(circle_at_center,#f0faff_0%,#ffffff_100%)] 
+            dark:bg-[radial-gradient(circle_at_center,#050510_0%,#000008_100%)]">
+  <div ref="container" class="relative w-full h-full rounded-full overflow-hidden z-10
+               shadow-[inset_0_0_120px_rgba(102,170,255,0.25),0_0_80px_rgba(102,170,255,0.3),0_0_160px_rgba(170,119,255,0.2),0_0_240px_rgba(255,136,221,0.15)]">
   </div>
+</div>
+
+
 </template>
