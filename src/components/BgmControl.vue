@@ -18,7 +18,7 @@ const currentTrack = computed(() => {
 
 <template>
   <div
-    class="flex items-center gap-3 rounded-full border border-white/70 bg-white/70 px-4 py-1.5 text-xs font-semibold text-slate-600 shadow-sm backdrop-blur"
+    class="flex w-full flex-wrap items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm backdrop-blur sm:w-auto sm:flex-nowrap sm:gap-3 sm:px-4"
   >
     <button
       class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white transition hover:brightness-110 active:scale-[0.95]"
@@ -26,9 +26,10 @@ const currentTrack = computed(() => {
     >
       {{ label }}
     </button>
+    <span class="block w-full truncate text-[11px] font-medium text-slate-500 sm:hidden">{{ currentTrack }}</span>
     <span class="hidden text-xs text-slate-500 sm:inline-flex">{{ currentTrack }}</span>
     <input
-      class="h-1 w-28 cursor-pointer accent-emerald-500 sm:w-24"
+      class="h-1 w-full min-w-[140px] flex-1 cursor-pointer accent-emerald-500 sm:w-24 sm:min-w-[96px]"
       type="range"
       min="0"
       max="1"

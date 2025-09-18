@@ -147,8 +147,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="relative min-h-screen w-full bg-gradient-to-b from-slate-50 via-white to-slate-100 p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-    <div class="absolute top-4 right-4 z-20">
+  <main class="relative min-h-screen w-full bg-gradient-to-b from-slate-50 via-white to-slate-100 px-4 pb-32 pt-[env(safe-area-inset-top)] sm:px-6 sm:pb-[env(safe-area-inset-bottom)]">
+    <div class="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4 sm:absolute sm:inset-auto sm:right-4 sm:top-4 sm:bottom-auto sm:justify-end sm:px-0">
       <BgmControl />
     </div>
 
