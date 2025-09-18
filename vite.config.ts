@@ -14,6 +14,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: true
+    sourcemap: true,
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vanta': ['vanta']
+        }
+      }
+    }
+  },
+  server: {
+    port: 3000
   }
 })
