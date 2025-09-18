@@ -5,13 +5,23 @@ let audio: HTMLAudioElement | null = null
 
 // Known good public radio streams (CORS-enabled)
 const DEFAULT_SOURCES = [
-  // Nightride streams have been stable and friendly to localhost testing
-  'https://stream.nightride.fm/lofi.mp3',
-  'https://stream.nightride.fm/jazzhop.mp3',
+  // Nightride HTTPS streams confirmed alive as of 2025-09
   'https://stream.nightride.fm/chillsynth.mp3',
+  'https://stream.nightride.fm/datawave.mp3',
+  'https://stream.nightride.fm/nightride.mp3',
   // SomaFM provides nice ambient backups but may rate-limit; keep as later fallbacks
   'https://ice1.somafm.com/groovesalad-128-mp3',
   'https://ice2.somafm.com/lush-128-mp3',
+]
+
+const LEGACY_SOURCE_REMAPPINGS: Array<(src: string) => string | null> = [
+  (src) => (src.includes('/lofi') ? 'https://stream.nightride.fm/chillsynth.mp3' : null),
+  (src) => (src.includes('/jazzhop') ? 'https://stream.nightride.fm/datawave.mp3' : null),
+  (src) => (src.includes('/chillwave') ? 'https://stream.nightride.fm/chillsynth.mp3' : null),
+  (src) => {
+    const match = src.match(/^https?:\/\/stream\.nightride\.fm:58000\/(.+)$/i)
+    return match ? `https://stream.nightride.fm/${match[1]}` : null
+  },
 ]
 
 const ENABLED_KEY = 'bgm:enabled'
@@ -41,7 +51,17 @@ function getDefaultVolume() {
 function getDefaultSrc() {
   try {
     const v = localStorage.getItem(SRC_KEY)
-    return v || DEFAULT_SOURCES[0]
+    if (v) {
+      for (const remap of LEGACY_SOURCE_REMAPPINGS) {
+        const mapped = remap(v)
+        if (mapped && mapped !== v) {
+          try { localStorage.setItem(SRC_KEY, mapped) } catch {}
+          return mapped
+        }
+      }
+      return v
+    }
+    return DEFAULT_SOURCES[0]
   } catch {
     return DEFAULT_SOURCES[0]
   }

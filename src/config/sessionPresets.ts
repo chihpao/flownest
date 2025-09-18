@@ -53,22 +53,22 @@ export interface AmbientTrack {
 
 export const AMBIENT_TRACKS: AmbientTrack[] = [
   {
-    id: 'lofi',
-    label: 'Lo-Fi 柔和',
-    description: '穩定低頻，讓思緒安靜不受打擾。',
-    url: 'https://stream.nightride.fm/lofi.mp3',
-  },
-  {
-    id: 'jazzhop',
-    label: 'Jazzhop 律動',
-    description: '輕快節拍，適合需要節奏感的創作。',
-    url: 'https://stream.nightride.fm/jazzhop.mp3',
-  },
-  {
-    id: 'chillwave',
-    label: 'Chillwave 氛圍',
-    description: '柔和合成音牆，營造迷人背景。',
+    id: 'chillsynth',
+    label: 'Chillsynth 柔波',
+    description: '柔和的合成器紋理，營造溫暖但不打擾的背景。',
     url: 'https://stream.nightride.fm/chillsynth.mp3',
+  },
+  {
+    id: 'datawave',
+    label: 'Datawave 流線',
+    description: '帶點律動的電子波形，讓專注維持平穩推進。',
+    url: 'https://stream.nightride.fm/datawave.mp3',
+  },
+  {
+    id: 'nightride',
+    label: 'Nightride Ambient',
+    description: '官方 Ambient 混音，層次豐富且耐聽。',
+    url: 'https://stream.nightride.fm/nightride.mp3',
   },
   {
     id: 'groove',
