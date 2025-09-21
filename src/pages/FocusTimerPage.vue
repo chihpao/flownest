@@ -10,7 +10,7 @@ const route = useRoute()
 const sessions = useSessions()
 
 const state = ref<'running' | 'finished'>('running')
-const activeTitle = ref('±Mª`®É¬q')
+const activeTitle = ref('å°ˆæ³¨æ™‚æ®µ')
 const minutesPlanned = ref(25)
 const remainingSeconds = ref(0)
 const startedAtMs = ref<number | null>(null)
@@ -72,7 +72,7 @@ function startCountdownFromRoute() {
   }
   minutesPlanned.value = Math.min(600, Math.max(1, Math.round(minutesParam)))
   const titleParam = (route.query.title as string | undefined)?.trim()
-  activeTitle.value = titleParam && titleParam.length ? titleParam : (selectedIntent.value?.name ?? '±Mª`®É¬q')
+  activeTitle.value = titleParam && titleParam.length ? titleParam : (selectedIntent.value?.name ?? 'å°ˆæ³¨æ™‚æ®µ')
   startedAtMs.value = Date.now()
   deadlineMs.value = startedAtMs.value + minutesPlanned.value * 60_000
   remainingSeconds.value = minutesPlanned.value * 60
@@ -149,18 +149,18 @@ function goToDone() {
   <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-sky-50 to-white px-4 pb-24 pt-[env(safe-area-inset-top)] text-slate-900 sm:px-6">
     <section class="mx-auto flex w-full max-w-4xl flex-col gap-10">
       <header class="space-y-2 text-center">
-        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">±Mª`­Ë¼Æ</span>
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">¦w±Æ¦n¥Ø¼Ğ¡AµM«á±M¤ß§¹¦¨¥¦</h1>
+        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.2em] text-emerald-600">å°ˆæ³¨å€’æ•¸</span>
+        <h1 class="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">å®‰æ’å¥½ç›®æ¨™ï¼Œç„¶å¾Œå°ˆå¿ƒå®Œæˆå®ƒ</h1>
         <p class="text-sm text-slate-500">
-          ­Ë¼Æµ²§ô®É·|¦Û°Ê¬ö¿ı¦¨ªG¡F¥¼µn¤J®É¬ö¿ı·|¼È¦s©óÂsÄı¾¹¡Aµn¤J«á¦Û°Ê¦P¨B¨ì±b¸¹¡C
+          å€’æ•¸çµæŸæ™‚æœƒè‡ªå‹•ç´€éŒ„æˆæœï¼›æœªç™»å…¥æ™‚ç´€éŒ„æœƒæš«å­˜æ–¼ç€è¦½å™¨ï¼Œç™»å…¥å¾Œè‡ªå‹•åŒæ­¥åˆ°å¸³è™Ÿã€‚
         </p>
       </header>
 
       <div v-if="state === 'running'" class="space-y-8 rounded-3xl border border-emerald-100 bg-white/95 p-8 shadow-xl shadow-emerald-200/60 backdrop-blur-sm">
         <div class="flex flex-col items-center gap-2 text-center">
-          <p class="text-xs uppercase tracking-[0.3em] text-emerald-500">¥Ø«e¶i¦æ¤¤</p>
+          <p class="text-xs tracking-[0.2em] text-emerald-500">ç›®å‰é€²è¡Œä¸­</p>
           <h2 class="text-2xl font-semibold text-slate-900 sm:text-3xl">{{ activeTitle }}</h2>
-          <p class="text-sm text-slate-500">{{ minutesPlanned }} ¤ÀÄÁ±Mª`</p>
+          <p class="text-sm text-slate-500">{{ minutesPlanned }} åˆ†é˜å°ˆæ³¨</p>
         </div>
 
         <div class="mx-auto flex w-full max-w-sm flex-col items-center gap-6">
@@ -191,32 +191,32 @@ function goToDone() {
             class="rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
             @click="finishNow"
           >
-            ´£¦­§¹¦¨
+            ææ—©å®Œæˆ
           </button>
           <button
             type="button"
             class="rounded-full border border-slate-200 px-6 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
             @click="cancelSession"
           >
-            ¨ú®ø¥»¦¸±Mª`
+            å–æ¶ˆæœ¬æ¬¡å°ˆæ³¨
           </button>
         </div>
       </div>
 
       <div v-else class="space-y-6 rounded-3xl border border-emerald-100 bg-white/95 p-8 text-center shadow-xl shadow-emerald-200/60 backdrop-blur-sm">
         <div class="space-y-2">
-          <h2 class="text-2xl font-semibold text-emerald-600">§¹¦¨¤@¦¸±Mª`¡I</h2>
+          <h2 class="text-2xl font-semibold text-emerald-600">å®Œæˆä¸€æ¬¡å°ˆæ³¨ï¼</h2>
           <p class="text-sm text-slate-500">
-            ¬ö¿ı¤w«O¦s{{ sessions.isGuest ? '¦bÂsÄı¾¹¤¤' : '¨ì§Aªº±b¸¹' }}¡C§A¥i¥H¥ß§Y¦A¨Ó¤@½ü©Î«e©¹¦¨ªG­¶ÀËµø§¹¾ã¬ö¿ı¡C
+            ç´€éŒ„å·²ä¿å­˜{{ sessions.isGuest ? 'åœ¨ç€è¦½å™¨ä¸­' : 'åˆ°ä½ çš„å¸³è™Ÿ' }}ã€‚ä½ å¯ä»¥ç«‹å³å†ä¾†ä¸€è¼ªæˆ–å‰å¾€æˆæœé æª¢è¦–å®Œæ•´ç´€éŒ„ã€‚
           </p>
         </div>
 
         <div v-if="lastSession" class="space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-left text-sm text-emerald-700">
           <p class="text-base font-semibold text-emerald-700">{{ lastSession.title }}</p>
-          <p>­pµe¡G{{ lastSession.minutesPlanned }} ¤ÀÄÁ ¡P ¹ê»Ú¡G{{ lastSession.minutesActual }} ¤ÀÄÁ</p>
-          <p class="text-xs text-emerald-600/90">§¹¦¨®É¶¡¡G{{ new Date(lastSession.finishedAt).toLocaleString() }}</p>
-          <p class="text-xs text-emerald-600/90" v-if="selectedAmbient">­µ´º¡G{{ selectedAmbient.label }}</p>
-          <p class="text-xs text-emerald-600/90">«ØÄ³¥ğ®§¡G{{ breakMinutes }} ¤ÀÄÁ</p>
+          <p>è¨ˆç•«ï¼š{{ lastSession.minutesPlanned }} åˆ†é˜ Â· å¯¦éš›ï¼š{{ lastSession.minutesActual }} åˆ†é˜</p>
+          <p class="text-xs text-emerald-600/90">å®Œæˆæ™‚é–“ï¼š{{ new Date(lastSession.finishedAt).toLocaleString() }}</p>
+          <p class="text-xs text-emerald-600/90" v-if="selectedAmbient">éŸ³æ™¯ï¼š{{ selectedAmbient.label }}</p>
+          <p class="text-xs text-emerald-600/90">å»ºè­°ä¼‘æ¯ï¼š{{ breakMinutes }} åˆ†é˜</p>
         </div>
 
         <div class="flex flex-wrap items-center justify-center gap-4">
@@ -226,14 +226,14 @@ function goToDone() {
             :disabled="logging"
             @click="startAnother"
           >
-            ¦A¨Ó¤@½ü
+            å†ä¾†ä¸€è¼ª
           </button>
           <button
             type="button"
             class="rounded-full border border-slate-200 px-6 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
             @click="goToDone"
           >
-            ¬d¬İ¦¨ªG¬ö¿ı
+            æŸ¥çœ‹æˆæœç´€éŒ„
           </button>
         </div>
 
@@ -242,3 +242,4 @@ function goToDone() {
     </section>
   </main>
 </template>
+

@@ -37,7 +37,7 @@ const currentTrack = computed(() => {
       :value="volume"
       :style="{ '--val': volume }"
       @input="(e: any) => setVolume(Number(e.target.value))"
-      aria-label="背景音樂音量"
+      aria-label="環境音音量"
     />
   </div>
 </template>
