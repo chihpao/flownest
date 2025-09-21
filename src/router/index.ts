@@ -1,19 +1,21 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const Welcome = () => import('@/pages/WelcomePage.vue')
-const Setup   = () => import('@/pages/FocusSetupPage.vue')
-const Timer   = () => import('@/pages/FocusTimerPage.vue')
-const Done    = () => import('@/pages/DonePage.vue')
+const Welcome  = () => import('@/pages/WelcomePage.vue')
+const Setup    = () => import('@/pages/FocusSetupPage.vue')
+const Timer    = () => import('@/pages/FocusTimerPage.vue')
+const Done     = () => import('@/pages/DonePage.vue')
+const Login    = () => import('@/pages/LoginView.vue')
+const DevTools = () => import('@/views/DevToolsView.vue')
 
-const router = createRouter({
+export default createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: Welcome },
-    { path: '/setup', component: Setup },
-    { path: '/timer', component: Timer },
-    { path: '/done', component: Done },
-    { path: '/:pathMatch(.*)*', redirect: '/' },
+    { path: '/',      name: 'welcome', component: Welcome },
+    { path: '/setup', name: 'setup',   component: Setup   },
+    { path: '/timer', name: 'timer',   component: Timer   },
+    { path: '/done',  name: 'done',    component: Done    },
+    { path: '/login', name: 'login',   component: Login   },
+    ...(import.meta.env.DEV ? [{ path: '/dev', name: 'dev', component: DevTools }] : []),
+    { path: '/:pathMatch(.*)*', redirect: '/' }, 
   ],
 })
-
-export default router

@@ -28,7 +28,6 @@ const ENABLED_KEY = 'bgm:enabled'
 const VOLUME_KEY = 'bgm:volume'
 const SRC_KEY = 'bgm:src'
 
-
 function getDefaultEnabled() {
   try {
     const v = localStorage.getItem(ENABLED_KEY)
@@ -69,7 +68,6 @@ function getDefaultSrc() {
 
 function ensureAudio() {
   if (audio) return audio
-  // Default remote lofi stream (can be overridden via setSource)
   const src = getDefaultSrc()
   const element = new Audio()
   element.loop = true
@@ -81,143 +79,190 @@ function ensureAudio() {
   return audio
 }
 
-export function useBgm() {
-  const enabled = ref(getDefaultEnabled())
-  const volume = ref(getDefaultVolume())
-  const isPlaying = ref(false)
-  const source = ref<string>('')
-  let retryCount = 0
-  const maxRetries = 3
-  let fallbackIndex = 0
+const enabled = ref(getDefaultEnabled())
+const volume = ref(getDefaultVolume())
+const isPlaying = ref(false)
+const source = ref<string>('')
 
+let retryCount = 0
+const maxRetries = 3
+let fallbackIndex = 0
+let listenersBound = false
+let consumers = 0
+
+function syncSourceFromAudio() {
+  if (!audio) return
+  source.value = audio.src
+  const idx = DEFAULT_SOURCES.findIndex((u) => audio && audio.src.includes(u))
+  if (idx >= 0) {
+    fallbackIndex = idx
+  }
+}
+
+function bindAudioListeners(target: HTMLAudioElement) {
+  if (listenersBound) return
+  target.addEventListener('play', onPlay)
+  target.addEventListener('pause', onPause)
+  target.addEventListener('playing', onPlaying)
+  target.addEventListener('stalled', onErrorOrStalled)
+  target.addEventListener('error', onErrorOrStalled)
+  listenersBound = true
+}
+
+function releaseAudioListeners(target: HTMLAudioElement) {
+  if (!listenersBound) return
+  target.removeEventListener('play', onPlay)
+  target.removeEventListener('pause', onPause)
+  target.removeEventListener('playing', onPlaying)
+  target.removeEventListener('stalled', onErrorOrStalled)
+  target.removeEventListener('error', onErrorOrStalled)
+  listenersBound = false
+}
+
+function ensureReadyAudio() {
   const a = ensureAudio()
-  a.volume = volume.value
-  source.value = a.src
-  // Track which default URL we started on
-  const startIdx = DEFAULT_SOURCES.findIndex(u => a.src.includes(u))
-  if (startIdx >= 0) fallbackIndex = startIdx
+  if (!a) return null
+  if (!listenersBound) {
+    bindAudioListeners(a)
+  }
+  if (a.volume !== volume.value) {
+    a.volume = volume.value
+  }
+  syncSourceFromAudio()
+  return a
+}
 
-  const canAutoplay = computed(() => enabled.value)
+async function play() {
+  const a = ensureReadyAudio()
+  if (!a) return
+  try {
+    await a.play()
+    isPlaying.value = true
+    enabled.value = true
+    try { localStorage.setItem(ENABLED_KEY, '1') } catch {}
+  } catch {
+    isPlaying.value = false
+  }
+}
 
-  const play = async () => {
+function pause() {
+  if (!audio) return
+  audio.pause()
+  isPlaying.value = false
+  enabled.value = false
+  try { localStorage.setItem(ENABLED_KEY, '0') } catch {}
+}
+
+function toggle() {
+  if (isPlaying.value) {
+    pause()
+  } else {
+    play()
+  }
+}
+
+function setVolumeValue(v: number) {
+  const vol = Math.min(1, Math.max(0, v))
+  volume.value = vol
+  if (audio) audio.volume = vol
+  try { localStorage.setItem(VOLUME_KEY, String(vol)) } catch {}
+}
+
+async function setSource(url: string) {
+  const a = ensureReadyAudio()
+  if (!a) return
+  try { localStorage.setItem(SRC_KEY, url) } catch {}
+  const wasPlaying = isPlaying.value
+  a.pause()
+  a.src = url
+  syncSourceFromAudio()
+  retryCount = 0
+  const idx = DEFAULT_SOURCES.findIndex((u) => u === url)
+  if (idx >= 0) fallbackIndex = idx
+  a.load()
+  if (wasPlaying || enabled.value) {
     try {
-      if (!audio) ensureAudio()
-      if (!audio) return
-      // If previous src failed, allow override to local /lofi.mp3 by user later
-      await audio.play()
+      await a.play()
       isPlaying.value = true
-      enabled.value = true
-      try { localStorage.setItem(ENABLED_KEY, '1') } catch {}
-    } catch (e) {
-      // Autoplay might be blocked; keep state consistent
+    } catch {
       isPlaying.value = false
     }
   }
+}
 
-  const pause = () => {
-    if (!audio) return
-    audio.pause()
-    isPlaying.value = false
-    enabled.value = false
-    try { localStorage.setItem(ENABLED_KEY, '0') } catch {}
-  }
+const onPlay = () => {
+  isPlaying.value = true
+  enabled.value = true
+  try { localStorage.setItem(ENABLED_KEY, '1') } catch {}
+}
 
-  const toggle = () => {
-    if (isPlaying.value) {
-      pause()
-    } else {
-      play()
-    }
-  }
+const onPause = () => {
+  isPlaying.value = false
+  enabled.value = false
+  try { localStorage.setItem(ENABLED_KEY, '0') } catch {}
+}
 
-  const setVolume = (v: number) => {
-    const vol = Math.min(1, Math.max(0, v))
-    volume.value = vol
-    if (audio) audio.volume = vol
-    try { localStorage.setItem(VOLUME_KEY, String(vol)) } catch {}
-  }
+const onPlaying = () => {
+  retryCount = 0
+}
 
-  const setSource = async (url: string) => {
-    if (!audio) ensureAudio()
-    if (!audio) return
-    try { localStorage.setItem(SRC_KEY, url) } catch {}
-    const wasPlaying = isPlaying.value
-    audio.pause()
-    audio.src = url
-    source.value = url
-    const idx = DEFAULT_SOURCES.findIndex(u => u === url)
-    if (idx >= 0) fallbackIndex = idx
-    // Some streams need load() to start buffering
-    audio.load()
-    if (wasPlaying || enabled.value) {
-      try { await audio.play(); isPlaying.value = true } catch { /* ignore autoplay errors */ }
-    }
-  }
-
-  // Keep reactive state in sync if user interacts with native controls
-  const onPlay = () => { isPlaying.value = true }
-  const onPause = () => { isPlaying.value = false }
-  const onPlaying = () => { retryCount = 0 }
-  const onErrorOrStalled = async () => {
-    if (!audio) return
-    // If too many retries on current URL, advance to next known fallback
-    if (retryCount >= maxRetries) {
-      // Only auto-advance if user hasn't explicitly chosen a custom URL
-      const saved = (() => { try { return localStorage.getItem(SRC_KEY) } catch { return null } })()
-      const isCustom = !!saved && !DEFAULT_SOURCES.includes(saved)
-      if (!isCustom) {
-        const current = audio.src
-        // Find current index within defaults (if any)
-        const currentIdx = DEFAULT_SOURCES.findIndex(u => current.includes(u))
-        fallbackIndex = currentIdx >= 0 ? currentIdx + 1 : fallbackIndex + 1
-        if (fallbackIndex < DEFAULT_SOURCES.length) {
-          const nextUrl = DEFAULT_SOURCES[fallbackIndex]
-          // Switch source and attempt play
-          await setSource(nextUrl)
-          retryCount = 0
-          return
-        }
+const onErrorOrStalled = async () => {
+  if (!audio) return
+  if (retryCount >= maxRetries) {
+    const saved = (() => {
+      try { return localStorage.getItem(SRC_KEY) } catch { return null }
+    })()
+    const isCustom = !!saved && !DEFAULT_SOURCES.includes(saved)
+    if (!isCustom) {
+      const current = audio.src
+      const currentIdx = DEFAULT_SOURCES.findIndex((u) => current.includes(u))
+      fallbackIndex = currentIdx >= 0 ? currentIdx + 1 : fallbackIndex + 1
+      if (fallbackIndex < DEFAULT_SOURCES.length) {
+        const nextUrl = DEFAULT_SOURCES[fallbackIndex]
+        await setSource(nextUrl)
+        retryCount = 0
+        return
       }
-      // No more fallbacks or custom URL set: stop retrying
-      return
     }
-
-    const delay = (retryCount + 1) * 2000
-    const url = audio.src
-    setTimeout(async () => {
-      if (!audio) return
-      try {
-        audio.pause()
-        audio.src = url
-        audio.load()
-        await audio.play()
-        isPlaying.value = true
-        retryCount++
-      } catch {
-        retryCount++
-      }
-    }, delay)
+    return
   }
 
-  a.addEventListener('play', onPlay)
-  a.addEventListener('pause', onPause)
-  a.addEventListener('playing', onPlaying)
-  a.addEventListener('stalled', onErrorOrStalled)
-  a.addEventListener('error', onErrorOrStalled)
+  const delay = (retryCount + 1) * 2000
+  const url = audio.src
+  setTimeout(async () => {
+    if (!audio) return
+    try {
+      audio.pause()
+      audio.src = url
+      syncSourceFromAudio()
+      audio.load()
+      await audio.play()
+      isPlaying.value = true
+      retryCount++
+    } catch {
+      retryCount++
+    }
+  }, delay)
+}
+
+export function useBgm() {
+  const ready = ensureReadyAudio()
+  if (ready) {
+    consumers++
+  }
+
+  const canAutoplay = computed(() => enabled.value)
+
+  if (canAutoplay.value && !isPlaying.value) {
+    play().catch(() => {})
+  }
 
   onUnmounted(() => {
-    a.removeEventListener('play', onPlay)
-    a.removeEventListener('pause', onPause)
-    a.removeEventListener('playing', onPlaying)
-    a.removeEventListener('stalled', onErrorOrStalled)
-    a.removeEventListener('error', onErrorOrStalled)
+    consumers = Math.max(0, consumers - 1)
+    if (consumers === 0 && audio) {
+      releaseAudioListeners(audio)
+    }
   })
-
-  // Try to start if enabled (may be blocked until user gesture)
-  if (canAutoplay.value && !isPlaying.value) {
-    // Fire and forget; catch is handled in play()
-    play()
-  }
 
   return {
     enabled,
@@ -227,7 +272,7 @@ export function useBgm() {
     play,
     pause,
     toggle,
-    setVolume,
+    setVolume: setVolumeValue,
     setSource,
   }
 }

@@ -1,4 +1,4 @@
-export interface FocusIntent {
+﻿export interface FocusIntent {
   id: string
   name: string
   description: string
@@ -14,7 +14,7 @@ export const FOCUS_INTENTS: FocusIntent[] = [
     description: '無通知、無打擾的沉浸式專注，適合長篇寫作與研究。',
     recommendedMinutes: 50,
     suggestedBreak: 10,
-    affirmation: '你已經營造了絕對安靜的空間。把握這段持續向前。',
+    affirmation: '你已經為自己打造了安心的專注空間，善用這段黃金時間。',
   },
   {
     id: 'creative',
@@ -22,7 +22,7 @@ export const FOCUS_INTENTS: FocusIntent[] = [
     description: '專為需要創造力的任務設計，節奏稍短但更有彈性。',
     recommendedMinutes: 35,
     suggestedBreak: 7,
-    affirmation: '偶爾換個角度，靈感就在呼吸之間。',
+    affirmation: '靈感就在每次呼吸之間，保持好奇與開放。',
   },
   {
     id: 'sprint',
@@ -30,7 +30,7 @@ export const FOCUS_INTENTS: FocusIntent[] = [
     description: '經典番茄鐘節奏，保持高能量並適時休息。',
     recommendedMinutes: 25,
     suggestedBreak: 5,
-    affirmation: '一小段高強度專注，就能推動整個下午。',
+    affirmation: '一小段高強度專注就能推動整個進度。',
   },
   {
     id: 'gentle',
@@ -38,7 +38,7 @@ export const FOCUS_INTENTS: FocusIntent[] = [
     description: '給自己一點溫柔，在穩定節奏中慢慢前進。',
     recommendedMinutes: 40,
     suggestedBreak: 8,
-    affirmation: '放慢一點也沒關係，穩穩抵達就好。',
+    affirmation: '放慢腳步沒有關係，穩穩向前就很好。',
   },
 ]
 
@@ -67,13 +67,13 @@ export const AMBIENT_TRACKS: AmbientTrack[] = [
   {
     id: 'nightride',
     label: 'Nightride Ambient',
-    description: '官方 Ambient 混音，層次豐富且耐聽。',
+    description: '官方 Ambient 混音，層次豐富又好聽。',
     url: 'https://stream.nightride.fm/nightride.mp3',
   },
   {
     id: 'groove',
     label: 'Groove Salad',
-    description: 'SomaFM 精選，下班後的輕盈專注。',
+    description: 'SomaFM 精選，輕鬆卻不失專注感。',
     url: 'https://ice1.somafm.com/groovesalad-128-mp3',
   },
 ]

@@ -1,5 +1,9 @@
 {
   "projects": {
-    "default": "flownest-focus"
-  }
+    "default": "flownest-focus",
+    "dev": "flownest-focus"
+  },
+  "targets": {},
+  "etags": {},
+  "dataconnectEmulatorConfig": {}
 }

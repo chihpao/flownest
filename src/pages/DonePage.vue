@@ -1,71 +1,95 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+﻿<script setup lang="ts">
+import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import PrimaryButton from '@/components/PrimaryButton.vue'
-import { findIntentById, findAmbientById } from '@/config/sessionPresets'
+import { useSessions } from '@/stores/useSessions'
 
-const route = useRoute()
 const router = useRouter()
+const sessions = useSessions()
 
-const intent = computed(() => findIntentById(route.query.intent as string | null))
-const ambient = computed(() => findAmbientById(route.query.ambient as string | null))
-
-const focusedMinutes = computed(() => {
-  const raw = Number(route.query.m)
-  if (Number.isFinite(raw) && raw > 0) return Math.round(raw)
-  return intent.value.recommendedMinutes
+onMounted(() => {
+  sessions.listenMine().catch(() => {})
 })
 
-const remainingMinutes = computed(() => {
-  const raw = Number(route.query.remaining)
-  if (Number.isFinite(raw) && raw >= 0) return Math.round(raw)
-  return 0
+const displaySessions = computed(() => {
+  return sessions.items.map((item) => {
+    const finishedAt = toMillis(item.finishedAt)
+    const startedAt = toMillis(item.startedAt)
+    return {
+      id: item.id,
+      title: item.title,
+      minutesPlanned: item.minutesPlanned,
+      minutesActual: item.minutesActual,
+      startedAt,
+      finishedAt,
+      finishedLabel: finishedAt ? new Date(finishedAt).toLocaleString() : '—',
+      durationLabel: `${item.minutesActual} 分鐘`,
+      source: item.source,
+    }
+  })
 })
 
-const breakMinutes = computed(() => {
-  const raw = Number(route.query.break)
-  if (Number.isFinite(raw) && raw > 0) return Math.round(raw)
-  return intent.value.suggestedBreak
-})
+function toMillis(value: any): number | null {
+  if (!value) return null
+  if (typeof value === 'number') return value
+  if (typeof value.toMillis === 'function') {
+    try {
+      return value.toMillis()
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
-const nextAction = computed(() => (remainingMinutes.value > 0 ? '你提前結束了這回合，花點時間紀錄成果再調整節奏。' : '恭喜完成專注任務，趁著餘韻記下關鍵成果，為下一輪充電。'))
-
-const handleRestart = () => {
-  router.push('/setup')
+function startAnother() {
+  router.push({ name: 'timer' }).catch(() => {})
 }
 </script>
 
 <template>
   <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-    <section class="mx-auto w-full max-w-3xl space-y-6 rounded-3xl border border-emerald-100 bg-white/90 p-8 shadow-xl shadow-emerald-100/50 backdrop-blur-sm">
+    <section class="mx-auto w-full max-w-4xl space-y-6 rounded-3xl border border-emerald-100 bg-white/90 p-8 shadow-xl shadow-emerald-100/50 backdrop-blur-sm">
       <header class="space-y-2 text-center">
-        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.3em] text-emerald-600">SESSION COMPLETE</span>
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">本輪專注完成 ✅</h1>
-        <p class="text-base leading-relaxed text-slate-600">{{ nextAction }}</p>
+        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.25em] text-emerald-600">FOCUS JOURNAL</span>
+        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">你的專注成果紀錄</h1>
+        <p class="text-sm text-slate-600">
+          {{ sessions.isGuest ? '目前以體驗模式保存，登入後會自動同步到帳號。' : '已與帳號同步，跨裝置都能看到最新紀錄。' }}
+        </p>
       </header>
 
-      <div class="grid gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-6 text-sm text-emerald-700 md:grid-cols-2">
-        <div class="space-y-2">
-          <h2 class="text-base font-semibold text-emerald-800">專注成果</h2>
-          <p><span class="font-semibold">模式：</span>{{ intent.name }}</p>
-          <p><span class="font-semibold">完成時間：</span>{{ focusedMinutes }} 分鐘</p>
-          <p v-if="remainingMinutes > 0"><span class="font-semibold">尚餘：</span>{{ remainingMinutes }} 分鐘（已提前結束）</p>
-        </div>
-        <div class="space-y-2">
-          <h2 class="text-base font-semibold text-emerald-800">恢復建議</h2>
-          <p><span class="font-semibold">建議休息：</span>{{ breakMinutes }} 分鐘</p>
-          <p><span class="font-semibold">音樂氛圍：</span>{{ ambient.label }}</p>
-          <p class="text-xs leading-relaxed text-emerald-600">{{ ambient.description }}</p>
-        </div>
+      <div v-if="displaySessions.length === 0" class="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-6 text-center text-sm text-emerald-700">
+        <p>尚未建立任何專注紀錄。</p>
+        <PrimaryButton label="開始第一段專注" @click="startAnother" class="mx-auto" />
       </div>
 
-      <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-6 text-center text-sm text-slate-600">
-        <p>
-          想為下一輪排定新節奏嗎？回到設定頁面可重新挑選專注意圖、時長與音景，並持續累積自己的專注儀式。
-        </p>
-      </div>
+      <div v-else class="space-y-6">
+        <ul class="space-y-4">
+          <li
+            v-for="session in displaySessions"
+            :key="session.id"
+            class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm"
+          >
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900">{{ session.title }}</h2>
+                <p class="text-xs text-slate-500">完成於 {{ session.finishedLabel }}</p>
+              </div>
+              <div class="flex flex-wrap gap-2 text-sm text-slate-600">
+                <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">{{ session.durationLabel }}</span>
+                <span class="rounded-full bg-slate-100 px-3 py-1">計畫 {{ session.minutesPlanned }} 分鐘</span>
+                <span class="rounded-full bg-slate-100 px-3 py-1">
+                  {{ session.source === 'guest' ? '本機紀錄' : '雲端同步' }}
+                </span>
+              </div>
+            </div>
+          </li>
+        </ul>
 
-      <PrimaryButton label="回到設定頁" @click="handleRestart" />
+        <div class="flex justify-center">
+          <PrimaryButton label="再開始一段專注" @click="startAnother" />
+        </div>
+      </div>
     </section>
   </main>
 </template>
