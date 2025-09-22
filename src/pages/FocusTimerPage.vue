@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ThreeBreathingSphere from '@/components/ThreeBreathingSphere.vue'
 import { useSessions } from '@/stores/useSessions'
 import { findIntentById, findAmbientById } from '@/config/sessionPresets'
+import { postAchievement } from '@/api/posts'
+import { useAuth } from '@/stores/useAuth'
 
 const router = useRouter()
 const route = useRoute()
 const sessions = useSessions()
+const auth = useAuth()
 
 const state = ref<'running' | 'finished'>('running')
 const activeTitle = ref('專注時段')
@@ -19,10 +22,15 @@ const lastSession = ref<{
   title: string
   minutesPlanned: number
   minutesActual: number
+  startedAt: number
   finishedAt: number
 } | null>(null)
 const logging = ref(false)
 const errorMessage = ref('')
+const shareMessage = ref('')
+const shareError = ref('')
+const shareStatus = ref<'idle' | 'success' | 'error'>('idle')
+const sharing = ref(false)
 let timerHandle: number | null = null
 
 const selectedIntent = computed(() => findIntentById(route.query.intent as string | null))
@@ -118,8 +126,12 @@ async function completeSession() {
       title: payload.title,
       minutesPlanned: payload.minutesPlanned,
       minutesActual,
+      startedAt: payload.startedAt,
       finishedAt,
     }
+    shareMessage.value = `完成專注：「${payload.title}」`
+    shareStatus.value = 'idle'
+    shareError.value = ''
   } catch (err: any) {
     errorMessage.value = err?.message ?? String(err)
   } finally {
@@ -143,6 +155,48 @@ function startAnother() {
 function goToDone() {
   router.push({ name: 'done' }).catch(() => {})
 }
+
+async function shareToWall() {
+  if (!lastSession.value) return
+  if (!shareMessage.value.trim()) {
+    shareError.value = '請先輸入想分享的內容'
+    return
+  }
+  if (!auth.isAuthed) {
+    await router.push({ name: 'login' }).catch(() => {})
+    return
+  }
+  if (sharing.value) return
+  sharing.value = true
+  shareError.value = ''
+  shareStatus.value = 'idle'
+  try {
+    await postAchievement({
+      contentText: shareMessage.value,
+      durationSec: Math.max(1, lastSession.value.minutesActual) * 60,
+      finishedAt: lastSession.value.finishedAt,
+    })
+    shareStatus.value = 'success'
+  } catch (err: any) {
+    shareStatus.value = 'error'
+    shareError.value = err?.message ?? String(err)
+  } finally {
+    sharing.value = false
+  }
+}
+
+watch(() => lastSession.value?.title, (title) => {
+  if (title) {
+    shareMessage.value = `完成專注：「${title}」`
+  }
+})
+
+watch(shareMessage, () => {
+  if (shareStatus.value === 'success') {
+    shareStatus.value = 'idle'
+  }
+  shareError.value = ''
+})
 </script>
 
 <template>
@@ -211,12 +265,40 @@ function goToDone() {
           </p>
         </div>
 
-        <div v-if="lastSession" class="space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-left text-sm text-emerald-700">
-          <p class="text-base font-semibold text-emerald-700">{{ lastSession.title }}</p>
-          <p>計畫：{{ lastSession.minutesPlanned }} 分鐘 · 實際：{{ lastSession.minutesActual }} 分鐘</p>
-          <p class="text-xs text-emerald-600/90">完成時間：{{ new Date(lastSession.finishedAt).toLocaleString() }}</p>
-          <p class="text-xs text-emerald-600/90" v-if="selectedAmbient">音景：{{ selectedAmbient.label }}</p>
-          <p class="text-xs text-emerald-600/90">建議休息：{{ breakMinutes }} 分鐘</p>
+        <div v-if="lastSession" class="space-y-4 text-left">
+          <div class="space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm text-emerald-700">
+            <p class="text-base font-semibold text-emerald-700">{{ lastSession.title }}</p>
+            <p>計畫：{{ lastSession.minutesPlanned }} 分鐘 · 實際：{{ lastSession.minutesActual }} 分鐘</p>
+            <p class="text-xs text-emerald-600/90">完成時間：{{ new Date(lastSession.finishedAt).toLocaleString() }}</p>
+            <p class="text-xs text-emerald-600/90" v-if="selectedAmbient">音景：{{ selectedAmbient.label }}</p>
+            <p class="text-xs text-emerald-600/90">建議休息：{{ breakMinutes }} 分鐘</p>
+          </div>
+
+          <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 text-sm text-slate-600">
+            <div class="flex items-center justify-between">
+              <p class="font-semibold text-slate-800">分享至留言牆</p>
+              <span v-if="shareStatus === 'success'" class="text-xs font-semibold text-emerald-600">已送出！</span>
+            </div>
+            <textarea
+              v-model="shareMessage"
+              rows="3"
+              placeholder="這次專注讓我……"
+              class="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            ></textarea>
+            <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+              <p>{{ auth.isAuthed ? '按下分享即可在留言牆看到成果。' : '登入後即可分享專注成果。' }}</p>
+              <button
+                type="button"
+                class="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
+                :disabled="sharing"
+                @click="shareToWall"
+              >
+                {{ sharing ? '分享中…' : '分享至留言牆' }}
+              </button>
+            </div>
+            <p v-if="shareError" class="text-xs text-rose-500">{{ shareError }}</p>
+            <p v-else-if="shareStatus === 'success'" class="text-xs text-emerald-500">成功分享！可前往留言牆查看。</p>
+          </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-center gap-4">

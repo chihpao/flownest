@@ -15,17 +15,21 @@ const sessions = useSessions()
 const content = ref('')
 const busy = ref(false)
 const error = ref('')
-const selectedSessionIds = ref<string[]>([])
+const selectedSessionId = ref<string>('')
 
 const isAuthed = computed(() => auth.isAuthed)
 const hasSessions = computed(() => sessionOptions.value.length > 0)
-const selectedCount = computed(() => selectedSessionIds.value.length)
+
+const selectedSession = computed(() => {
+  if (!selectedSessionId.value) return null
+  return sessions.items.find((item) => item.id === selectedSessionId.value) ?? null
+})
 
 watch(content, () => {
   if (error.value) error.value = ''
 })
 
-watch(selectedSessionIds, () => {
+watch(selectedSessionId, () => {
   if (error.value) error.value = ''
 })
 
@@ -44,14 +48,16 @@ const sessionOptions = computed(() => {
     })
 })
 
-watch(
-  sessionOptions,
-  (options) => {
-    const validIds = new Set(options.map((option) => option.id))
-    selectedSessionIds.value = selectedSessionIds.value.filter((id) => validIds.has(id))
-  },
-  { immediate: true }
-)
+watch(sessionOptions, (options) => {
+  if (!options.length) {
+    selectedSessionId.value = ''
+    return
+  }
+  const exists = options.some((option) => option.id === selectedSessionId.value)
+  if (!exists) {
+    selectedSessionId.value = options[0]?.id ?? ''
+  }
+}, { immediate: true })
 
 onMounted(() => {
   if (!sessions.items.length) {
@@ -64,20 +70,27 @@ async function handleSubmit() {
     router.push({ name: 'login' }).catch(() => {})
     return
   }
-  if (!selectedSessionIds.value.length) {
-    error.value = '請至少選擇一筆要分享的成果。'
+
+  const text = content.value.trim()
+  if (!text) {
+    error.value = '請先寫下想分享的想法或內容。'
     return
   }
 
   busy.value = true
   try {
-    const docId = await postAchievement({
-      content: content.value,
-      sessionIds: selectedSessionIds.value,
+    const target = selectedSession.value
+    const durationSec = target ? Math.max(1, Math.round(target.minutesActual || target.minutesPlanned || 0)) * 60 : undefined
+    const finishedAt = target ? sessionStatsHelpers.toMillis(target.finishedAt) ?? undefined : undefined
+
+    const { postId } = await postAchievement({
+      contentText: text,
+      imageUrl: null,
+      durationSec,
+      finishedAt,
     })
     content.value = ''
-    selectedSessionIds.value = []
-    emit('posted', docId)
+    emit('posted', postId)
   } catch (err: any) {
     error.value = err?.message ?? String(err)
   } finally {
@@ -92,10 +105,10 @@ async function handleSubmit() {
       <div class="flex items-start justify-between gap-3">
         <div>
           <h2 class="text-base font-semibold text-slate-900">分享你的專注腳步</h2>
-          <p class="mt-1 text-xs text-slate-500">勾選想公開的成果，也可以補充心情或重點。</p>
+          <p class="mt-1 text-xs text-slate-500">挑選想公開的成果，也可以補充心情或重點。</p>
         </div>
-        <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-          已選 {{ selectedCount }} / {{ sessionOptions.length }}
+        <span v-if="selectedSession" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+          選擇：{{ selectedSession.title }}
         </span>
       </div>
 
@@ -110,8 +123,8 @@ async function handleSubmit() {
             class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/60"
           >
             <input
-              v-model="selectedSessionIds"
-              type="checkbox"
+              v-model="selectedSessionId"
+              type="radio"
               :value="option.id"
               class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"
             />
@@ -138,12 +151,7 @@ async function handleSubmit() {
 
       <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
         <p>系統會自動帶入每段成果的摘要與完成時間。</p>
-        <PrimaryButton
-          class="w-auto"
-          :disabled="busy || !selectedCount || !hasSessions"
-          label="發布"
-          @click="handleSubmit"
-        />
+        <PrimaryButton class="w-auto" :disabled="busy" label="發布" @click="handleSubmit" />
       </div>
       <p v-if="error" class="mt-2 text-xs text-rose-500">{{ error }}</p>
     </template>
@@ -151,7 +159,7 @@ async function handleSubmit() {
     <div v-else class="flex flex-col items-center gap-3 text-center text-sm text-slate-600">
       <h2 class="text-base font-semibold text-slate-900">登入後即可分享</h2>
       <p class="max-w-xs text-xs text-slate-500">
-        記錄你的專注成果、加上一句話鼓勵社群。登入之後可挑選多筆成果一次發布。
+        記錄你的專注成果、加上一句話鼓勵社群。登入之後即可挑選專注成果快速發布。
       </p>
       <PrimaryButton label="立即登入" class="w-auto" @click="() => router.push({ name: 'login' })" />
     </div>
