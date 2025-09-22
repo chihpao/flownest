@@ -1,4 +1,4 @@
-﻿import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { auth, db } from '@/lib/firebase'
 import {
   addDoc,
@@ -40,11 +40,18 @@ export type SessionItem = {
 
 type SessionsMode = 'guest' | 'cloud'
 
+type SyncNoticeState = {
+  count: number
+  at: number | null
+  visible: boolean
+}
+
 type SessionsState = {
   items: SessionItem[]
   mode: SessionsMode
   error: string
   unsub: Unsubscribe | null
+  syncNotice: SyncNoticeState
 }
 
 function mapLocalSession(session: LocalSession): SessionItem {
@@ -80,9 +87,16 @@ export const useSessions = defineStore('sessions', {
     mode: 'guest',
     error: '',
     unsub: null,
+    syncNotice: {
+      count: 0,
+      at: null,
+      visible: false,
+    },
   }),
   getters: {
     isGuest: (state) => state.mode === 'guest',
+    hasSyncNotice: (state) => state.syncNotice.visible && state.syncNotice.count > 0,
+    latestSession: (state) => (state.items.length ? state.items[0] : null),
   },
   actions: {
     resetListener() {
@@ -94,6 +108,19 @@ export const useSessions = defineStore('sessions', {
 
     setError(message: string) {
       this.error = message
+    },
+
+    dismissSyncNotice() {
+      this.syncNotice.visible = false
+    },
+
+    publishSyncNotice(count: number) {
+      if (count <= 0) return
+      this.syncNotice = {
+        count,
+        at: Date.now(),
+        visible: true,
+      }
     },
 
     loadLocal() {
@@ -116,12 +143,16 @@ export const useSessions = defineStore('sessions', {
         where('ownerId', '==', uid),
         orderBy('finishedAt', 'desc')
       )
-      this.unsub = onSnapshot(q, (snap) => {
-        this.items = snap.docs.map((docSnap) => mapCloudSession(docSnap.id, docSnap.data()))
-      }, (err) => {
-        this.setError(err?.message ?? String(err))
-        this.items = []
-      })
+      this.unsub = onSnapshot(
+        q,
+        (snap) => {
+          this.items = snap.docs.map((docSnap) => mapCloudSession(docSnap.id, docSnap.data()))
+        },
+        (err) => {
+          this.setError(err?.message ?? String(err))
+          this.items = []
+        }
+      )
     },
 
     async logCompletion(payload: SessionLogPayload) {
@@ -161,9 +192,9 @@ export const useSessions = defineStore('sessions', {
 
     async migrateLocalToCloud() {
       const uid = auth.currentUser?.uid
-      if (!uid) return
+      if (!uid) return 0
       const locals = listLocalSessions()
-      if (!locals.length) return
+      if (!locals.length) return 0
 
       try {
         const col = collection(db, 'sessions')
@@ -180,6 +211,8 @@ export const useSessions = defineStore('sessions', {
           })
         }
         clearLocalSessions()
+        this.publishSyncNotice(locals.length)
+        return locals.length
       } catch (err: any) {
         this.setError(err?.message ?? String(err))
         throw err

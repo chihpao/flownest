@@ -4,33 +4,26 @@ import { useRouter } from 'vue-router'
 import BgmControl from '@/components/BgmControl.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import { useBgm } from '@/components/useBgm'
-import {
-  FOCUS_INTENTS,
-  AMBIENT_TRACKS,
-  findIntentById,
-} from '@/config/sessionPresets'
+import { AMBIENT_TRACKS, findAmbientById } from '@/config/sessionPresets'
 
 const router = useRouter()
 const { isPlaying, play: playBgm, setSource } = useBgm()
 
 const title = ref('')
-const baseDurations = [15, 20, 25, 30, 45, 60, 90]
-const selectedIntentId = ref(FOCUS_INTENTS[0].id)
-const selectedDuration = ref(FOCUS_INTENTS[0].recommendedMinutes)
+const presetDurations = [15, 30, 45]
+const selectedDuration = ref(presetDurations[1])
 const customDuration = ref('')
 const selectedAmbientId = ref(AMBIENT_TRACKS[0].id)
 
-const selectedIntent = computed(() => findIntentById(selectedIntentId.value))
-const selectedAmbient = computed(() => {
-  const found = AMBIENT_TRACKS.find((track) => track.id === selectedAmbientId.value)
-  return found ?? AMBIENT_TRACKS[0]
-})
-const selectedBreakMinutes = computed(() => selectedIntent.value.suggestedBreak)
+const selectedAmbient = computed(() => findAmbientById(selectedAmbientId.value))
 
 const availableDurations = computed(() => {
-  const set = new Set(baseDurations)
-  set.add(selectedIntent.value.recommendedMinutes)
-  return Array.from(set).sort((a, b) => a - b)
+  return presetDurations
+})
+
+const previewTitle = computed(() => {
+  const trimmed = title.value.trim()
+  return trimmed.length ? trimmed : '專注時段'
 })
 
 const parsedCustom = computed(() => {
@@ -57,14 +50,6 @@ onMounted(() => {
   setSource(selectedAmbient.value.url).catch(() => {})
 })
 
-function selectIntent(id: string) {
-  if (selectedIntentId.value === id) return
-  selectedIntentId.value = id
-  const intent = findIntentById(id)
-  selectedDuration.value = intent.recommendedMinutes
-  customDuration.value = ''
-}
-
 function handleTimeSelect(minutes: number) {
   selectedDuration.value = minutes
   customDuration.value = ''
@@ -87,8 +72,6 @@ async function handleStart() {
   if (!canStart.value || effectiveMinutes.value === null) return
   const query: Record<string, string> = {
     m: String(effectiveMinutes.value),
-    intent: selectedIntent.value.id,
-    break: String(selectedBreakMinutes.value),
     ambient: selectedAmbient.value.id,
   }
   const trimmed = title.value.trim()
@@ -129,29 +112,6 @@ async function handleStart() {
             />
           </div>
 
-          <div class="space-y-3">
-            <label class="block text-sm font-semibold text-slate-700">專注模式</label>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <button
-                v-for="intent in FOCUS_INTENTS"
-                :key="intent.id"
-                type="button"
-                class="rounded-2xl border p-4 text-left transition"
-                :class="intent.id === selectedIntentId
-                  ? 'border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100'
-                  : 'border-slate-200 bg-white hover:border-emerald-200 hover:shadow'
-                "
-                @click="selectIntent(intent.id)"
-              >
-                <div class="flex items-center justify-between">
-                  <h3 class="text-base font-semibold text-slate-800">{{ intent.name }}</h3>
-                  <span class="text-xs font-semibold text-emerald-500">建議 {{ intent.recommendedMinutes }} 分鐘</span>
-                </div>
-                <p class="mt-1 text-sm leading-relaxed text-slate-500">{{ intent.description }}</p>
-              </button>
-            </div>
-          </div>
-
           <div class="space-y-4">
             <label class="block text-sm font-semibold text-slate-700">專注時長</label>
             <div class="grid gap-3 sm:grid-cols-3">
@@ -167,10 +127,6 @@ async function handleStart() {
                 >
                   {{ minutes }} 分鐘
                 </button>
-                <span
-                  v-if="minutes === selectedIntent.recommendedMinutes"
-                  class="absolute -right-2 -top-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white"
-                >推薦</span>
               </div>
             </div>
 
@@ -213,7 +169,7 @@ async function handleStart() {
               <li
                 v-for="track in AMBIENT_TRACKS"
                 :key="track.id"
-                class="rounded-2xl border px-4 py-3 transition"
+                class="cursor-pointer select-none rounded-2xl border px-4 py-3 transition"
                 :class="track.id === selectedAmbientId
                   ? 'border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100'
                   : 'border-slate-200 bg-white hover:border-emerald-200 hover:shadow'
@@ -232,13 +188,12 @@ async function handleStart() {
           <article class="space-y-4 rounded-3xl border border-emerald-200 bg-emerald-50/90 p-6 shadow-lg shadow-emerald-100">
             <header class="space-y-1">
               <h2 class="text-lg font-semibold text-emerald-700">專注摘要</h2>
-              <p class="text-sm text-emerald-600">{{ selectedIntent.affirmation }}</p>
             </header>
 
             <ul class="space-y-2 text-sm text-emerald-700">
               <li class="flex items-center justify-between">
-                <span>專注模式</span>
-                <span class="font-semibold">{{ selectedIntent.name }}</span>
+                <span>專注主題</span>
+                <span class="font-semibold">{{ previewTitle }}</span>
               </li>
               <li class="flex items-center justify-between">
                 <span>專注時長</span>
@@ -247,10 +202,6 @@ async function handleStart() {
               <li class="flex items-center justify-between">
                 <span>環境氛圍</span>
                 <span class="font-semibold">{{ selectedAmbient.label }}</span>
-              </li>
-              <li class="flex items-center justify-between">
-                <span>建議休息</span>
-                <span class="font-semibold">{{ selectedBreakMinutes }} 分鐘</span>
               </li>
             </ul>
           </article>
