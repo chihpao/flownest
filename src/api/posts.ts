@@ -76,9 +76,19 @@ export async function likePost(postId: string) {
       userId: user.uid,
       createdAt: serverTimestamp(),
     })
+    const postData = postSnap.data()
     tx.update(postRef, {
-      likeCount: (postSnap.data().likeCount ?? 0) + 1,
+      likeCount: (postData.likeCount ?? 0) + 1,
       updatedAt: serverTimestamp(),
+      // 包含所有必要的欄位以滿足安全規則
+      authorId: postData.authorId,
+      authorName: postData.authorName || '',
+      authorAvatar: postData.authorAvatar || '',
+      contentText: postData.contentText || '',
+      imageUrl: postData.imageUrl || null,
+      durationSec: postData.durationSec || null,
+      finishedAt: postData.finishedAt || null,
+      createdAt: postData.createdAt
     })
   })
 
@@ -101,10 +111,20 @@ export async function unlikePost(postId: string) {
     if (!postSnap.exists()) throw new Error('貼文不存在或已被移除')
 
     tx.delete(likeDocRef)
-    const current = postSnap.data().likeCount ?? 0
+    const postData = postSnap.data()
+    const current = postData.likeCount ?? 0
     tx.update(postRef, {
       likeCount: Math.max(0, current - 1),
       updatedAt: serverTimestamp(),
+      // 包含所有必要的欄位以滿足安全規則
+      authorId: postData.authorId,
+      authorName: postData.authorName || '',
+      authorAvatar: postData.authorAvatar || '',
+      contentText: postData.contentText || '',
+      imageUrl: postData.imageUrl || null,
+      durationSec: postData.durationSec || null,
+      finishedAt: postData.finishedAt || null,
+      createdAt: postData.createdAt
     })
   })
 

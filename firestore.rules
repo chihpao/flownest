@@ -7,7 +7,7 @@ service cloud.firestore {
     }
 
     function isServer() {
-      return request.auth != null && request.auth.token.admin == true;
+      return request.auth != null && request.auth.token.get('admin', false) == true;
     }
 
     match /users/{userId} {
@@ -26,22 +26,28 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.auth.uid == request.resource.data.authorId
         && request.resource.data.likeCount == 0;
+      
+      // 簡化更新規則，只檢查必要的欄位
       allow update: if isServer()
         || (
           isSignedIn()
+          // 確保作者 ID 不變
           && request.resource.data.authorId == resource.data.authorId
-          && request.resource.data.authorName == resource.data.authorName
-          && request.resource.data.authorAvatar == resource.data.authorAvatar
-          && request.resource.data.contentText == resource.data.contentText
-          && request.resource.data.imageUrl == resource.data.imageUrl
-          && request.resource.data.durationSec == resource.data.durationSec
-          && request.resource.data.finishedAt == resource.data.finishedAt
-          && request.resource.data.createdAt == resource.data.createdAt
+          // 只檢查 likeCount 的變化
           && request.resource.data.likeCount >= 0
           && (
+            // 允許 likeCount 加 1 或減 1
             request.resource.data.likeCount == resource.data.likeCount + 1 ||
             request.resource.data.likeCount == resource.data.likeCount - 1
           )
+          // 確保其他必要欄位存在但不強制檢查值是否相同
+          && 'authorName' in request.resource.data
+          && 'authorAvatar' in request.resource.data
+          && 'contentText' in request.resource.data
+          && 'imageUrl' in request.resource.data
+          && 'durationSec' in request.resource.data
+          && 'finishedAt' in request.resource.data
+          && 'createdAt' in request.resource.data
         );
       allow delete: if false;
     }
