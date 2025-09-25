@@ -9,8 +9,9 @@ const auth = useAuth()
 
 const navItems = [
   { name: 'timer', label: '專注計時', to: { name: 'timer' } },
-  { name: 'done', label: '成果紀錄', to: { name: 'done' } },
-  { name: 'wall', label: '留言牆', to: { name: 'wall' } },
+  { name: 'done', label: '成效紀錄', to: { name: 'done' } },
+  { name: 'wall', label: '社群圈', to: { name: 'wall' } },
+  { name: 'chat', label: '私人聊天', to: { name: 'chat' } },
 ]
 
 const showEmulatorBadge = import.meta.env.DEV || import.meta.env.VITE_USE_EMULATOR === 'true'
@@ -63,6 +64,11 @@ async function goLogin() {
 async function goRecords() {
   closeMenu()
   await router.push({ name: 'done' }).catch(() => {})
+}
+
+async function goChat() {
+  closeMenu()
+  await router.push({ name: 'chat' }).catch(() => {})
 }
 
 async function logout() {
@@ -127,7 +133,7 @@ async function logout() {
             </svg>
           </button>
 
-          <transition name="fade">
+                    <transition name="fade">
             <div
               v-if="menuOpen"
               class="absolute right-0 mt-2 w-48 rounded-2xl border border-emerald-100 bg-white p-2 text-sm text-slate-600 shadow-lg shadow-emerald-100/60"
@@ -137,8 +143,16 @@ async function logout() {
                 class="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
                 @click="goRecords"
               >
-                成果紀錄
+                成效紀錄
                 <span class="text-xs text-emerald-500">Dashboard</span>
+              </button>
+              <button
+                type="button"
+                class="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
+                @click="goChat"
+              >
+                私人聊天
+                <span class="text-xs text-emerald-500">Messages</span>
               </button>
               <button
                 type="button"
@@ -167,3 +181,4 @@ async function logout() {
   opacity: 0;
 }
 </style>
+

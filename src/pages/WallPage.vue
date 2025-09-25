@@ -35,6 +35,7 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const notice = ref('')
+const viewMode = ref<'all' | 'circle'>('all')
 const loadingMore = ref(false)
 const hasMore = ref(true)
 
@@ -46,6 +47,8 @@ const likePending = ref<Record<string, boolean>>({})
 const likeOverrides = ref<Record<string, number>>({})
 const followLookup = ref<Record<string, boolean>>({})
 const followPending = ref<Record<string, boolean>>({})
+const followingIds = ref<string[]>([])
+const followingIdSet = computed(() => new Set(followingIds.value))
 
 const currentUid = computed(() => auth.user?.uid ?? null)
 const isAuthed = computed(() => auth.isAuthed)
@@ -76,7 +79,7 @@ function mapDocToPost(docSnap: DocumentSnapshot): WallPost {
   const authorId = data.authorId ?? ''
   const likeCount = likeOverrides.value[id] ?? data.likeCount ?? 0
   const liked = !!likedLookup.value[id]
-  const following = authorId ? !!followLookup.value[authorId] : false
+  const following = authorId ? !!(followLookup.value[authorId] ?? followingIdSet.value.has(authorId)) : false
   const finishedLabel = data.finishedAt ? formatTimestamp(data.finishedAt) : null
 
   return {
@@ -107,6 +110,14 @@ const posts = computed(() => {
     .map(mapDocToPost)
   return [...mappedHead, ...mappedOlder]
 })
+
+const circlePosts = computed(() => {
+  if (!followingIds.value.length) return []
+  const allowed = followingIdSet.value
+  return posts.value.filter((post) => allowed.has(post.authorId))
+})
+
+const visiblePosts = computed(() => (viewMode.value === 'circle' ? circlePosts.value : posts.value))
 
 function detachListener() {
   if (stop) {
@@ -147,6 +158,7 @@ async function refreshRelationships() {
     likedLookup.value = {}
     likeOverrides.value = {}
     followLookup.value = {}
+    followingIds.value = []
     return
   }
   const [liked, follows] = await Promise.all([
@@ -161,6 +173,7 @@ async function refreshRelationships() {
   const followObj: Record<string, boolean> = {}
   follows.forEach((id) => { followObj[id] = true })
   followLookup.value = followObj
+  followingIds.value = Array.from(follows)
 }
 
 async function loadInitial() {
@@ -253,6 +266,13 @@ async function toggleFollow(authorId: string, following: boolean) {
       await followUser(authorId)
     }
     followLookup.value = { ...followLookup.value, [authorId]: !following }
+    if (!following) {
+      if (!followingIdSet.value.has(authorId)) {
+        followingIds.value = [...followingIds.value, authorId]
+      }
+    } else {
+      followingIds.value = followingIds.value.filter((id) => id !== authorId)
+    }
   } catch (err: any) {
     error.value = err?.message ?? String(err)
   } finally {
@@ -268,6 +288,12 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   detachListener()
+})
+
+watch(isAuthed, (authed) => {
+  if (!authed) {
+    viewMode.value = 'all'
+  }
 })
 
 watch(() => auth.user?.uid, async () => {
@@ -307,17 +333,53 @@ watch(() => auth.user?.uid, async () => {
             {{ error }}
           </div>
 
+          <div class="flex flex-wrap items-center gap-3 rounded-3xl border border-emerald-100 bg-white/90 px-4 py-3 text-sm text-emerald-600 shadow-sm">
+            <div class="inline-flex rounded-full bg-emerald-50/80 p-1 text-sm font-semibold">
+              <button
+                type="button"
+                class="rounded-full px-4 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                :class="viewMode === 'all' ? 'bg-emerald-500 text-white shadow' : 'text-emerald-600 hover:bg-emerald-100/80'"
+                @click="viewMode = 'all'"
+              >
+                全部貼文
+              </button>
+              <button
+                type="button"
+                class="rounded-full px-4 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                :class="[viewMode === 'circle' ? 'bg-emerald-500 text-white shadow' : 'text-emerald-600 hover:bg-emerald-100/80', !isAuthed ? 'opacity-60 cursor-not-allowed' : '']"
+                @click="isAuthed ? (viewMode = 'circle') : router.push({ name: 'login' })"
+              >
+                我的圈子
+              </button>
+            </div>
+            <p v-if="viewMode === 'circle'" class="text-xs text-emerald-600/80">{{ isAuthed ? (followingIds.length ? '尚未追蹤任何人，先到全部貼文找靈感吧。' : '追蹤幾位夥伴後就能看到他們的最新動態。') : '登入後即可查看你的圈子。' }}</p>
+          </div>
+
+
           <div v-if="loading" class="grid place-content-center rounded-3xl border border-slate-200 bg-white/80 p-12 text-sm text-slate-400 shadow-inner">
             載入最新貼文...
           </div>
 
-          <div v-else-if="posts.length === 0" class="rounded-3xl border border-emerald-100 bg-white/95 p-12 text-center shadow-lg shadow-emerald-100/60">
-            <p class="text-base font-semibold text-emerald-600">目前還沒有貼文</p>
-            <p class="mt-2 text-sm text-emerald-600/80">分享你的第一筆成果，鼓勵更多夥伴加入！</p>
+          <div v-else-if="visiblePosts.length === 0" class="space-y-4 rounded-3xl border border-emerald-100 bg-white/95 p-12 text-center shadow-lg shadow-emerald-100/60">
+            <p class="text-base font-semibold text-emerald-600">{{ viewMode === 'circle' ? '圈內好友暫時還沒有動態' : '目前還沒有最新貼文' }}</p>
+            <p class="text-sm text-emerald-600/80">
+              {{ viewMode === 'circle'
+                ? (followingIds.length
+                    ? '等等大家更新，或切換回全部貼文看看其他人的分享。'
+                    : '先到全部貼文逛逛，追蹤幾位讓你有感覺的伴侶吧。')
+                : '成為第一個分享專注成果的人吧！' }}
+            </p>
+            <button
+              v-if="viewMode === 'circle'"
+              type="button"
+              class="inline-flex rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-400"
+              @click="viewMode = 'all'"
+            >
+              查看全部貼文
+            </button>
           </div>
-
           <ul v-else class="space-y-5">
-            <li v-for="post in posts" :key="post.id">
+            <li v-for="post in visiblePosts" :key="post.id">
               <PostCard
                 :author-id="post.authorId"
                 :author-name="post.authorName"
