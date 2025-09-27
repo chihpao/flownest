@@ -100,27 +100,20 @@ export function listenToMessages(
 
 export async function sendMessage(receiverId: string, text: string) {
   const user = auth.currentUser
-  if (!user) throw new Error('需要登入後才可傳送訊息')
+  if (!user) throw new Error('Must be signed in to send messages')
   const senderId = user.uid
   const trimmed = text.trim()
-  if (!trimmed) throw new Error('請輸入訊息內容')
-  if (!receiverId) throw new Error('缺少接收者')
+  if (!trimmed) throw new Error('Message text is required')
+  if (!receiverId) throw new Error('Missing receiverId')
 
   const chatId = buildChatId(senderId, receiverId)
   const threadRef = doc(db, 'chatThreads', chatId)
   const messageRef = doc(collection(db, 'messages'))
 
   await runTransaction(db, async (tx) => {
-    const now = serverTimestamp()
-    tx.set(messageRef, {
-      chatId,
-      senderId,
-      receiverId,
-      text: trimmed,
-      timestamp: now,
-    })
-
     const threadSnap = await tx.get(threadRef)
+    const now = serverTimestamp()
+
     let participantIds: string[]
     let unreadCount: Record<string, number>
     let lastReadAt: Record<string, Timestamp | any>
@@ -141,7 +134,7 @@ export async function sendMessage(receiverId: string, text: string) {
     unreadCount[receiverId] = (unreadCount[receiverId] ?? 0) + 1
     lastReadAt[senderId] = now
 
-    const payload: Record<string, any> = {
+    const threadPayload: Record<string, any> = {
       chatId,
       participantIds,
       lastMessage: trimmed,
@@ -153,10 +146,18 @@ export async function sendMessage(receiverId: string, text: string) {
     }
 
     if (!threadSnap.exists()) {
-      payload.createdAt = now
+      threadPayload.createdAt = now
     }
 
-    tx.set(threadRef, payload, { merge: true })
+    tx.set(messageRef, {
+      chatId,
+      senderId,
+      receiverId,
+      text: trimmed,
+      timestamp: now,
+    })
+
+    tx.set(threadRef, threadPayload, { merge: true })
   })
 }
 
@@ -176,3 +177,4 @@ export async function markThreadAsRead(chatId: string, uid?: string) {
     }
   }
 }
+
