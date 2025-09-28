@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import { auth, db, googleProvider } from '@/lib/firebase'
 import { useSessions } from '@/stores/useSessions'
+import { useChatThreads } from '@/stores/useChatThreads'
 import {
   signInWithPopup,
   createUserWithEmailAndPassword,
@@ -45,12 +46,19 @@ export const useAuth = defineStore('auth', {
         this.ready = true
 
         const sessions = useSessions()
+        const chatThreads = useChatThreads()
+        if (u) {
+          chatThreads.start(u.uid)
+        } else {
+          chatThreads.stop()
+        }
+
         try {
           if (u) {
             await sessions.migrateLocalToCloud()
           }
         } catch {
-          // 若搬遷失敗，仍保留本機紀錄
+          // �Y�ϥ��Ѥ]���n���׬y�{
         }
 
         sessions.listenMine().catch(() => {})

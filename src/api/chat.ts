@@ -16,12 +16,26 @@ import {
 import { FirebaseError } from 'firebase/app'
 import { auth, db } from '@/lib/firebase'
 
+export type ChatMessageType = 'text' | 'share'
+
+export interface ChatSharePayload {
+  url: string
+  title?: string
+  description?: string
+  imageUrl?: string | null
+  thumbnailUrl?: string | null
+  iconUrl?: string | null
+  siteName?: string | null
+}
+
 export interface ChatMessage {
   id: string
   chatId: string
   senderId: string
   receiverId: string
   text: string
+  type: ChatMessageType
+  share?: ChatSharePayload | null
   timestamp?: Timestamp
 }
 
@@ -32,12 +46,16 @@ export interface ChatThreadData {
   lastSenderId?: string
   updatedAt?: Timestamp
   lastMessageAt?: Timestamp
+  lastMessageType?: ChatMessageType
+  lastShare?: ChatSharePayload | null
   unreadCount?: Record<string, number>
   lastReadAt?: Record<string, Timestamp>
 }
 
 function mapThread(docSnap: QueryDocumentSnapshot<DocumentData>): ChatThreadData {
   const data = docSnap.data() as Record<string, any>
+  const share = normalizeSharePayload(data.lastShare)
+  const type: ChatMessageType = data.lastMessageType === 'share' || share ? 'share' : 'text'
   return {
     id: docSnap.id,
     participantIds: Array.isArray(data.participantIds) ? data.participantIds : [],
@@ -45,6 +63,8 @@ function mapThread(docSnap: QueryDocumentSnapshot<DocumentData>): ChatThreadData
     lastSenderId: data.lastSenderId ?? '',
     updatedAt: data.updatedAt,
     lastMessageAt: data.lastMessageAt ?? data.updatedAt,
+    lastMessageType: type,
+    lastShare: share,
     unreadCount: typeof data.unreadCount === 'object' && data.unreadCount ? data.unreadCount : {},
     lastReadAt: typeof data.lastReadAt === 'object' && data.lastReadAt ? data.lastReadAt : {},
   }
@@ -52,14 +72,38 @@ function mapThread(docSnap: QueryDocumentSnapshot<DocumentData>): ChatThreadData
 
 function mapMessage(docSnap: QueryDocumentSnapshot<DocumentData>): ChatMessage {
   const data = docSnap.data() as Record<string, any>
+  const share = normalizeSharePayload(data.share)
+  const type: ChatMessageType = data.type === 'share' || share ? 'share' : 'text'
   return {
     id: docSnap.id,
     chatId: data.chatId,
     senderId: data.senderId,
     receiverId: data.receiverId,
     text: data.text ?? '',
+    type,
+    share,
     timestamp: data.timestamp,
   }
+}
+
+function normalizeSharePayload(raw: any): ChatSharePayload | null {
+  if (!raw || typeof raw !== 'object') return null
+  const url = typeof raw.url === 'string' ? raw.url.trim() : ''
+  if (!url) return null
+  const payload: ChatSharePayload = { url }
+  const append = (key: keyof ChatSharePayload, value: any) => {
+    if (typeof value !== 'string') return
+    const trimmed = value.trim()
+    if (!trimmed) return
+    payload[key] = trimmed
+  }
+  append('title', raw.title)
+  append('description', raw.description)
+  append('imageUrl', raw.imageUrl)
+  append('thumbnailUrl', raw.thumbnailUrl)
+  append('iconUrl', raw.iconUrl)
+  append('siteName', raw.siteName)
+  return payload
 }
 
 export function buildChatId(a: string, b: string) {
@@ -98,15 +142,46 @@ export function listenToMessages(
   }, onError)
 }
 
-export async function sendMessage(receiverId: string, text: string) {
+export type SendMessageInput = string | {
+  text?: string
+  type?: ChatMessageType
+  share?: ChatSharePayload | null
+}
+
+function extractMessageParts(input: SendMessageInput): { type: ChatMessageType; text: string; share: ChatSharePayload | null } {
+  if (typeof input === 'string') {
+    const textOnly = input.trim()
+    if (!textOnly) throw new Error('Message text is required')
+    return { type: 'text', text: textOnly, share: null }
+  }
+
+  const desiredType = input.type === 'share' || input.share ? 'share' : 'text'
+  const text = (input.text ?? '').trim()
+  const share = normalizeSharePayload(input.share)
+
+  if (desiredType === 'share') {
+    if (!share) {
+      throw new Error('Share payload requires a valid url')
+    }
+    return { type: 'share', text, share }
+  }
+
+  if (!text) {
+    throw new Error('Message text is required')
+  }
+  return { type: 'text', text, share: null }
+}
+
+export async function sendMessage(receiverId: string, input: SendMessageInput) {
   const user = auth.currentUser
   if (!user) throw new Error('Must be signed in to send messages')
   const senderId = user.uid
-  const trimmed = text.trim()
-  if (!trimmed) throw new Error('Message text is required')
-  if (!receiverId) throw new Error('Missing receiverId')
+  const trimmedReceiver = receiverId?.trim()
+  if (!trimmedReceiver) throw new Error('Missing receiverId')
 
-  const chatId = buildChatId(senderId, receiverId)
+  const { type, text, share } = extractMessageParts(input)
+
+  const chatId = buildChatId(senderId, trimmedReceiver)
   const threadRef = doc(db, 'chatThreads', chatId)
   const messageRef = doc(collection(db, 'messages'))
 
@@ -121,25 +196,31 @@ export async function sendMessage(receiverId: string, text: string) {
     if (threadSnap.exists()) {
       const data = threadSnap.data() as Record<string, any>
       const existing = Array.isArray(data.participantIds) ? data.participantIds : []
-      participantIds = Array.from(new Set([...existing, senderId, receiverId])).sort()
+      participantIds = Array.from(new Set([...existing, senderId, trimmedReceiver])).sort()
       unreadCount = { ...(data.unreadCount ?? {}) }
       lastReadAt = { ...(data.lastReadAt ?? {}) }
     } else {
-      participantIds = [senderId, receiverId].sort()
+      participantIds = [senderId, trimmedReceiver].sort()
       unreadCount = {}
       lastReadAt = {}
     }
 
     unreadCount[senderId] = 0
-    unreadCount[receiverId] = (unreadCount[receiverId] ?? 0) + 1
+    unreadCount[trimmedReceiver] = (unreadCount[trimmedReceiver] ?? 0) + 1
     lastReadAt[senderId] = now
+
+    const summary = type === 'share'
+      ? (text || share?.title || share?.url || '')
+      : text
 
     const threadPayload: Record<string, any> = {
       chatId,
       participantIds,
-      lastMessage: trimmed,
+      lastMessage: summary,
       lastSenderId: senderId,
       lastMessageAt: now,
+      lastMessageType: type,
+      lastShare: share ?? null,
       updatedAt: now,
       unreadCount,
       lastReadAt,
@@ -149,14 +230,17 @@ export async function sendMessage(receiverId: string, text: string) {
       threadPayload.createdAt = now
     }
 
-    tx.set(messageRef, {
+    const messagePayload: Record<string, any> = {
       chatId,
       senderId,
-      receiverId,
-      text: trimmed,
+      receiverId: trimmedReceiver,
+      text,
+      type,
+      share: share ?? null,
       timestamp: now,
-    })
+    }
 
+    tx.set(messageRef, messagePayload)
     tx.set(threadRef, threadPayload, { merge: true })
   })
 }
@@ -177,4 +261,3 @@ export async function markThreadAsRead(chatId: string, uid?: string) {
     }
   }
 }
-

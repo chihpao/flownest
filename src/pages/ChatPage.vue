@@ -1,18 +1,23 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { type Unsubscribe, Timestamp } from 'firebase/firestore'
+import { Timestamp, type Unsubscribe } from 'firebase/firestore'
 import { useAuth } from '@/stores/useAuth'
+import { useChatThreads } from '@/stores/useChatThreads'
 import { fetchFollowingIds } from '@/api/posts'
 import { fetchUsersByIds, type UserProfile } from '@/api/users'
+import ChatSharePreview from '@/components/chat/ChatSharePreview.vue'
+import { extractFirstUrl, fetchLinkPreview } from '@/utils/linkPreview'
 import {
   buildChatId,
   listenToMessages,
-  listenToThreads,
   markThreadAsRead,
   sendMessage,
   type ChatMessage,
   type ChatThreadData,
+  type ChatMessageType,
+  type ChatSharePayload,
+  type SendMessageInput,
 } from '@/api/chat'
 
 interface ChatPartner {
@@ -28,11 +33,14 @@ interface ConversationItem {
   lastMessage: string
   lastSenderId: string
   lastMessageAt: number | null
+  lastMessageType: ChatMessageType
+  lastShare: ChatSharePayload | null
   unreadCount: number
 }
 
 const auth = useAuth()
 const router = useRouter()
+const chatThreads = useChatThreads()
 
 const contactMap = ref<Record<string, ChatPartner>>({})
 const threadMap = ref<Record<string, ChatThreadData>>({})
@@ -45,7 +53,6 @@ const sending = ref(false)
 const error = ref('')
 const followingsLoaded = ref(false)
 
-const threadsUnsub = ref<Unsubscribe | null>(null)
 const messagesUnsub = ref<Unsubscribe | null>(null)
 const messageListRef = ref<HTMLDivElement | null>(null)
 
@@ -66,8 +73,10 @@ const conversations = computed<ConversationItem[]>(() => {
     const lastMessage = thread?.lastMessage ?? ''
     const lastSenderId = thread?.lastSenderId ?? ''
     const lastMessageAt = toMillis(thread?.lastMessageAt ?? thread?.updatedAt ?? null)
+    const lastMessageType: ChatMessageType = thread?.lastMessageType ?? 'text'
+    const lastShare = thread?.lastShare ?? null
     const unreadCount = thread?.unreadCount?.[uid] ?? 0
-    items.push({ chatId, partner, lastMessage, lastSenderId, lastMessageAt, unreadCount })
+    items.push({ chatId, partner, lastMessage, lastSenderId, lastMessageAt, lastMessageType, lastShare, unreadCount })
   }
   items.sort((a, b) => {
     const diff = (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0)
@@ -113,10 +122,44 @@ function formatMessageTime(timestamp?: Timestamp) {
 }
 
 function messagePreview(item: ConversationItem) {
-  if (!item.lastMessage) return '開始聊天吧'
-  const text = item.lastMessage.replace(/\s+/g, ' ').trim()
-  const prefix = item.lastSenderId === myUid.value ? '我：' : ''
-  return prefix + (text.length > 42 ? `${text.slice(0, 42)}…` : text)
+  const isMine = item.lastSenderId === myUid.value
+  const prefix = isMine ? '我: ' : ''
+  if (item.lastMessageType === 'share') {
+    const base = (item.lastShare?.title ?? item.lastShare?.url ?? item.lastMessage ?? '').trim()
+    if (!base) return prefix + '分享了一則內容'
+    return prefix + (base.length > 42 ? `${base.slice(0, 42)}…` : base)
+  }
+  const message = (item.lastMessage ?? '').replace(/\s+/g, ' ').trim()
+  if (!message) {
+    return prefix + '發送了一則訊息'
+  }
+  return prefix + (message.length > 42 ? `${message.slice(0, 42)}…` : message)
+}
+
+const MESSAGE_LINK_REGEX = /https?:\/\/[^\s]+/gi
+
+function formatMessageBody(text?: string) {
+  if (!text) return ''
+  const escaped = escapeHtml(text)
+  const withLinks = escaped.replace(
+    MESSAGE_LINK_REGEX,
+    (match) =>
+      '<a href="' +
+      match +
+      '" target="_blank" rel="noopener noreferrer" class="underline decoration-emerald-300 hover:decoration-emerald-500">' +
+      match +
+      '</a>'
+  )
+  return withLinks.replace(/\r?\n/g, '<br />')
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function initialsFrom(partner: ChatPartner) {
@@ -186,12 +229,6 @@ function applyThreads(list: ChatThreadData[]) {
   }
 }
 
-function stopThreads() {
-  if (threadsUnsub.value) {
-    threadsUnsub.value()
-    threadsUnsub.value = null
-  }
-}
 
 function stopMessages() {
   if (messagesUnsub.value) {
@@ -201,7 +238,6 @@ function stopMessages() {
 }
 
 function resetState() {
-  stopThreads()
   stopMessages()
   contactMap.value = {}
   threadMap.value = {}
@@ -227,6 +263,7 @@ function selectConversation(partnerId: string) {
   if (!uid) return
   const chatId = buildChatId(uid, partnerId)
   if (activeChatId.value === chatId) return
+  chatThreads.clearThreadUnread(chatId, uid)
   activeChatId.value = chatId
 }
 
@@ -237,12 +274,21 @@ async function handleSend() {
   }
   const partner = activePartner.value
   if (!partner) return
-  const text = messageDraft.value.trim()
+  const rawText = messageDraft.value
+  const text = rawText.trim()
   if (!text || sending.value) return
   sending.value = true
   error.value = ''
   try {
-    await sendMessage(partner.uid, text)
+    let payload: SendMessageInput = text
+    const url = extractFirstUrl(text)
+    if (url) {
+      const preview = await fetchLinkPreview(url)
+      if (preview) {
+        payload = { text, type: 'share', share: preview }
+      }
+    }
+    await sendMessage(partner.uid, payload)
     messageDraft.value = ''
     scrollMessagesToBottom('smooth')
   } catch (err: any) {
@@ -256,12 +302,17 @@ watch(myUid, (uid) => {
   resetState()
   if (!uid) return
   void loadFollowings()
-  threadsUnsub.value = listenToThreads(uid, (items) => {
-    applyThreads(items)
-  }, (err) => {
-    error.value = err?.message ?? String(err)
-  })
 }, { immediate: true })
+
+watch(() => chatThreads.threads, (items) => {
+  applyThreads(items)
+}, { immediate: true })
+
+watch(() => chatThreads.error, (message) => {
+  if (message) {
+    error.value = message
+  }
+})
 
 watch(conversations, (list) => {
   if (!isAuthed.value) return
@@ -277,15 +328,16 @@ watch(activeChatId, (chatId, prev) => {
   if (chatId === prev) return
   stopMessages()
   messages.value = []
-  if (!chatId || !myUid.value) return
+  const uid = myUid.value
+  if (!chatId || !uid) return
   loadingMessages.value = true
+  chatThreads.clearThreadUnread(chatId, uid)
   messagesUnsub.value = listenToMessages(chatId, (items) => {
     messages.value = items
     loadingMessages.value = false
     scrollMessagesToBottom('auto')
-    if (myUid.value) {
-      void markThreadAsRead(chatId, myUid.value)
-    }
+    void markThreadAsRead(chatId, uid)
+    chatThreads.clearThreadUnread(chatId, uid)
   }, (err) => {
     loadingMessages.value = false
     error.value = err?.message ?? String(err)
@@ -451,7 +503,7 @@ onBeforeUnmount(() => {
                   開始第一則訊息，打個招呼吧！
                 </div>
 
-                <ul v-else class="space-y-3">
+                                <ul v-else class="space-y-3">
                   <li
                     v-for="message in messages"
                     :key="message.id"
@@ -459,14 +511,22 @@ onBeforeUnmount(() => {
                     :class="message.senderId === myUid ? 'justify-end' : 'justify-start'"
                   >
                     <div class="max-w-[75%] space-y-1">
-                      <div
-                        class="rounded-2xl px-4 py-2 text-sm shadow"
-                        :class="message.senderId === myUid
-                          ? 'bg-emerald-500 text-white shadow-emerald-200/60'
-                          : 'bg-white text-slate-700 shadow-emerald-100/30'
-                        "
-                      >
-                        <p class="whitespace-pre-line break-words">{{ message.text }}</p>
+                      <div class="space-y-2">
+                        <div
+                          v-if="message.text"
+                          class="rounded-2xl px-4 py-2 text-sm shadow"
+                          :class="message.senderId === myUid
+                            ? 'bg-emerald-500 text-white shadow-emerald-200/60'
+                            : 'bg-white text-slate-700 shadow-emerald-100/30'
+                          "
+                        >
+                          <p class="whitespace-pre-line break-words" v-html="formatMessageBody(message.text)"></p>
+                        </div>
+                        <ChatSharePreview
+                          v-if="message.type === 'share' && message.share"
+                          :share="message.share"
+                          :variant="message.senderId === myUid ? 'outgoing' : 'incoming'"
+                        />
                       </div>
                       <p class="text-xs"
                         :class="message.senderId === myUid ? 'text-emerald-400 text-right' : 'text-slate-400 text-left'"

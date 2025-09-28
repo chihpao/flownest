@@ -1,11 +1,13 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/stores/useAuth'
+import { useChatThreads } from '@/stores/useChatThreads'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuth()
+const chatThreads = useChatThreads()
 
 const navItems = [
   { name: 'timer', label: '專注計時', to: { name: 'timer' } },
@@ -13,6 +15,9 @@ const navItems = [
   { name: 'wall', label: '社群圈', to: { name: 'wall' } },
   { name: 'chat', label: '私人聊天', to: { name: 'chat' } },
 ]
+
+const unreadTotal = computed(() => chatThreads.unreadTotal)
+const unreadBadge = computed(() => (unreadTotal.value > 99 ? '99+' : String(unreadTotal.value)))
 
 const showEmulatorBadge = import.meta.env.DEV || import.meta.env.VITE_USE_EMULATOR === 'true'
 
@@ -101,7 +106,13 @@ async function logout() {
             : 'hover:bg-emerald-100 hover:text-emerald-600'
           "
         >
-          {{ item.label }}
+          <span>{{ item.label }}</span>
+          <span
+            v-if="item.name === 'chat' && unreadTotal"
+            class="ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-rose-500 px-2 text-[0.65rem] font-semibold text-white"
+          >
+            {{ unreadBadge }}
+          </span>
         </router-link>
       </div>
 
@@ -133,7 +144,7 @@ async function logout() {
             </svg>
           </button>
 
-                    <transition name="fade">
+          <transition name="fade">
             <div
               v-if="menuOpen"
               class="absolute right-0 mt-2 w-48 rounded-2xl border border-emerald-100 bg-white p-2 text-sm text-slate-600 shadow-lg shadow-emerald-100/60"
@@ -148,11 +159,21 @@ async function logout() {
               </button>
               <button
                 type="button"
-                class="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
+                class="mt-1 flex w全 items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
                 @click="goChat"
               >
-                私人聊天
-                <span class="text-xs text-emerald-500">Messages</span>
+                <span class="flex w-full items-center justify-between">
+                  <span class="flex items-center gap-2">
+                    <span>私人聊天</span>
+                    <span
+                      v-if="unreadTotal"
+                      class="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-rose-500 px-2 text-[0.65rem] font-semibold text-white"
+                    >
+                      {{ unreadBadge }}
+                    </span>
+                  </span>
+                  <span class="text-xs text-emerald-500">Messages</span>
+                </span>
               </button>
               <button
                 type="button"
@@ -181,4 +202,3 @@ async function logout() {
   opacity: 0;
 }
 </style>
-

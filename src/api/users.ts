@@ -1,4 +1,4 @@
-import { doc, getDoc } from 'firebase/firestore'
+﻿import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 export interface UserProfile {
@@ -18,7 +18,7 @@ export async function fetchUsersByIds(ids: string[]): Promise<Record<string, Use
     const data = snap.data() as Record<string, any>
     return [uid, {
       uid,
-      displayName: (data.displayName ?? data.email ?? '').trim() || '匿名使用者',
+      displayName: resolveDisplayName(uid, data),
       photoURL: (data.photoURL ?? '').trim(),
       email: (data.email ?? '').trim(),
     } satisfies UserProfile] as const
@@ -31,4 +31,15 @@ export async function fetchUsersByIds(ids: string[]): Promise<Record<string, Use
     result[uid] = profile
   }
   return result
+}
+
+function resolveDisplayName(uid: string, data: Record<string, any>) {
+  const displayName = (data.displayName ?? '').trim()
+  if (displayName) return displayName
+  const email = (data.email ?? '').trim()
+  if (email) {
+    const local = email.split('@')[0]?.trim()
+    if (local) return local
+  }
+  return `使用者_${uid.slice(0, 6)}`
 }
