@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { collection, getDocs, limit, onSnapshot, orderBy, query, startAfter, type DocumentSnapshot, type Unsubscribe } from 'firebase/firestore'
-import { useRouter } from 'vue-router'
 import NewPostBar from '@/components/posts/NewPostBar.vue'
 import PostCard from '@/components/posts/PostCard.vue'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/stores/useAuth'
+import { useLoginRedirect } from '@/composables/useLoginRedirect'
 import { fetchFollowingIds, fetchLikedPostIds, followUser, likePost, unfollowUser, unlikePost } from '@/api/posts'
 
 interface WallPost {
@@ -30,7 +30,7 @@ interface WallPost {
 const PAGE_SIZE = 10
 
 const auth = useAuth()
-const router = useRouter()
+const { pushLogin } = useLoginRedirect()
 
 const loading = ref(true)
 const error = ref('')
@@ -233,7 +233,7 @@ function handlePosted() {
 
 async function toggleLike(postId: string, liked: boolean) {
   if (!auth.user) {
-    router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('support').catch(() => {})
     return
   }
   if (likePending.value[postId]) return
@@ -253,7 +253,7 @@ async function toggleLike(postId: string, liked: boolean) {
 
 async function toggleFollow(authorId: string, following: boolean) {
   if (!auth.user) {
-    router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('follow').catch(() => {})
     return
   }
   if (!authorId || authorId === currentUid.value) return
@@ -347,7 +347,7 @@ watch(() => auth.user?.uid, async () => {
                 type="button"
                 class="rounded-full px-4 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
                 :class="[viewMode === 'circle' ? 'bg-emerald-500 text-white shadow' : 'text-emerald-600 hover:bg-emerald-100/80', !isAuthed ? 'opacity-60 cursor-not-allowed' : '']"
-                @click="isAuthed ? (viewMode = 'circle') : router.push({ name: 'login' })"
+                @click="isAuthed ? (viewMode = 'circle') : pushLogin('support').catch(() => {})"
               >
                 我的圈子
               </button>

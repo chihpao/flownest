@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import hero from '@/assets/hero.svg'
 import BackgroundWaves from '@/components/BackgroundWaves.vue'
 </script>

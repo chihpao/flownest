@@ -1,4 +1,4 @@
-﻿export interface FocusIntent {
+export interface FocusIntent {
   id: string
   name: string
   description: string

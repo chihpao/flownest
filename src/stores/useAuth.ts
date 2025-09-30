@@ -1,4 +1,4 @@
-﻿// src/stores/useAuth.ts
+// src/stores/useAuth.ts
 import { defineStore } from 'pinia'
 import { auth, db, googleProvider } from '@/lib/firebase'
 import { useSessions } from '@/stores/useSessions'

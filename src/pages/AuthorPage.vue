@@ -5,6 +5,7 @@ import { collection, getDocs, limit, onSnapshot, orderBy, query, startAfter, whe
 import PostCard from '@/components/posts/PostCard.vue'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/stores/useAuth'
+import { useLoginRedirect } from '@/composables/useLoginRedirect'
 import { fetchFollowingIds, fetchLikedPostIds, followUser, likePost, unfollowUser, unlikePost } from '@/api/posts'
 
 interface AuthorPost {
@@ -30,6 +31,7 @@ const PAGE_SIZE = 10
 const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
+const { pushLogin } = useLoginRedirect()
 
 const authorId = computed(() => route.params.uid as string)
 const safeAuthorId = computed(() => (authorId.value ? String(authorId.value) : ''))
@@ -225,7 +227,7 @@ async function loadMore() {
 
 async function toggleLike(postId: string, liked: boolean) {
   if (!auth.user) {
-    router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('support').catch(() => {})
     return
   }
   if (likePending.value[postId]) return
@@ -245,7 +247,7 @@ async function toggleLike(postId: string, liked: boolean) {
 
 async function toggleFollow(currentlyFollowing: boolean) {
   if (!auth.user) {
-    router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('follow').catch(() => {})
     return
   }
   if (!safeAuthorId.value || safeAuthorId.value === currentUid.value) return

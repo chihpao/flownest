@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { Timestamp, type Unsubscribe } from 'firebase/firestore'
 import { useAuth } from '@/stores/useAuth'
+import { useLoginRedirect } from '@/composables/useLoginRedirect'
 import { useChatThreads } from '@/stores/useChatThreads'
 import { fetchFollowingIds } from '@/api/posts'
 import { fetchUsersByIds, type UserProfile } from '@/api/users'
@@ -39,8 +39,8 @@ interface ConversationItem {
 }
 
 const auth = useAuth()
-const router = useRouter()
 const chatThreads = useChatThreads()
+const { pushLogin, loginLocation } = useLoginRedirect()
 
 const contactMap = ref<Record<string, ChatPartner>>({})
 const threadMap = ref<Record<string, ChatThreadData>>({})
@@ -50,6 +50,7 @@ const messageDraft = ref('')
 const loadingContacts = ref(false)
 const loadingMessages = ref(false)
 const sending = ref(false)
+const chatLoginLink = computed(() => loginLocation('chat'))
 const error = ref('')
 const followingsLoaded = ref(false)
 
@@ -256,7 +257,7 @@ function scrollMessagesToBottom(behavior: ScrollBehavior = 'auto') {
 
 function selectConversation(partnerId: string) {
   if (!isAuthed.value) {
-    router.push({ name: 'login' }).catch(() => {})
+    void pushLogin('chat').catch(() => {})
     return
   }
   const uid = myUid.value
@@ -269,7 +270,7 @@ function selectConversation(partnerId: string) {
 
 async function handleSend() {
   if (!isAuthed.value) {
-    router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('chat').catch(() => {})
     return
   }
   const partner = activePartner.value
@@ -387,7 +388,7 @@ onBeforeUnmount(() => {
               <p class="font-semibold">登入後即可展開私人聊天</p>
               <p>追蹤感興趣的夥伴後，他們會出現在這裡，點一下就能開始對話。</p>
               <router-link
-                to="/login"
+                :to="chatLoginLink"
                 class="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow transition hover:bg-emerald-400"
               >
                 立即登入
@@ -464,7 +465,7 @@ onBeforeUnmount(() => {
             <p class="text-lg font-semibold text-slate-700">登入後即可建立私人訊息</p>
             <p class="max-w-sm text-sm">加入 FlowNest 社群，追蹤專注夥伴並開啟一對一的即時對談。</p>
             <router-link
-              to="/login"
+              :to="chatLoginLink"
               class="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-400"
             >
               立即登入

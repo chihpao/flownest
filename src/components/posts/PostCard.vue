@@ -93,7 +93,7 @@ const avatarFallback = computed(() => {
       </div>
     </header>
 
-    <p class="whitespace-pre-line text-base leading-relaxed text-slate-800">{{ contentText }}</p>
+    <p class="whitespace-pre-line break-words text-base leading-relaxed text-slate-800">{{ contentText }}</p>
 
     <div v-if="imageUrl" class="mt-4 overflow-hidden rounded-2xl border border-slate-100">
       <img :src="imageUrl" alt="post image" class="h-52 w-full object-cover" />

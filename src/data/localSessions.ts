@@ -1,4 +1,4 @@
-﻿export type LocalSession = {
+export type LocalSession = {
   id: string
   title: string
   minutesPlanned: number

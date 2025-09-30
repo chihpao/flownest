@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import { postAchievement } from '@/api/posts'
 import { useAuth } from '@/stores/useAuth'
 import { useSessions } from '@/stores/useSessions'
+import { useLoginRedirect } from '@/composables/useLoginRedirect'
 import { sessionStatsHelpers } from '@/utils/sessionsStats'
 
 const emit = defineEmits<{ posted: [string] }>()
 
-const router = useRouter()
 const auth = useAuth()
 const sessions = useSessions()
+const { pushLogin } = useLoginRedirect()
 const content = ref('')
 const busy = ref(false)
 const error = ref('')
@@ -67,7 +67,7 @@ onMounted(() => {
 
 async function handleSubmit() {
   if (!isAuthed.value) {
-    router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('share').catch(() => {})
     return
   }
 
@@ -161,7 +161,7 @@ async function handleSubmit() {
       <p class="max-w-xs text-xs text-slate-500">
         記錄你的專注成果、加上一句話鼓勵社群。登入之後即可挑選專注成果快速發布。
       </p>
-      <PrimaryButton label="立即登入" class="w-auto" @click="() => router.push({ name: 'login' })" />
+      <PrimaryButton label="立即登入" class="w-auto" @click="() => pushLogin('share').catch(() => {})" />
     </div>
   </div>
 </template>

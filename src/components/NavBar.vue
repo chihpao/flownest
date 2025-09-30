@@ -1,13 +1,15 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/stores/useAuth'
 import { useChatThreads } from '@/stores/useChatThreads'
+import { useLoginRedirect } from '@/composables/useLoginRedirect'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuth()
 const chatThreads = useChatThreads()
+const { pushLogin } = useLoginRedirect()
 
 const navItems = [
   { name: 'timer', label: '專注計時', to: { name: 'timer' } },
@@ -63,7 +65,7 @@ onBeforeUnmount(() => {
 })
 
 async function goLogin() {
-  await router.push({ name: 'login' }).catch(() => {})
+  await pushLogin('general').catch(() => {})
 }
 
 async function goRecords() {

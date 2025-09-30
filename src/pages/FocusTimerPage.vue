@@ -6,11 +6,13 @@ import { useSessions } from '@/stores/useSessions'
 import { findIntentById, findAmbientById } from '@/config/sessionPresets'
 import { postAchievement } from '@/api/posts'
 import { useAuth } from '@/stores/useAuth'
+import { useLoginRedirect } from '@/composables/useLoginRedirect'
 
 const router = useRouter()
 const route = useRoute()
 const sessions = useSessions()
 const auth = useAuth()
+const { pushLogin } = useLoginRedirect()
 
 const state = ref<'running' | 'finished'>('running')
 const activeTitle = ref('專注時段')
@@ -163,7 +165,7 @@ async function shareToWall() {
     return
   }
   if (!auth.isAuthed) {
-    await router.push({ name: 'login' }).catch(() => {})
+    await pushLogin('share').catch(() => {})
     return
   }
   if (sharing.value) return

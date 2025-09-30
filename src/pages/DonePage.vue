@@ -72,7 +72,7 @@ const listSessions = computed(() => sessions.items.map((item) => {
 const hasSessions = computed(() => totalSessions.value > 0)
 
 function startAnother() {
-  router.push({ name: 'timer' }).catch(() => {})
+  router.push({ name: 'setup' }).catch(() => {})
 }
 
 function setView(mode: ViewMode) {

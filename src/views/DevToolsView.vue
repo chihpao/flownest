@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAuth } from '@/stores/useAuth'
 import { useSessions } from '@/stores/useSessions'
