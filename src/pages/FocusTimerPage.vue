@@ -7,6 +7,8 @@ import { findIntentById, findAmbientById } from '@/config/sessionPresets'
 import { postAchievement } from '@/api/posts'
 import { useAuth } from '@/stores/useAuth'
 import { useLoginRedirect } from '@/composables/useLoginRedirect'
+import EncouragementGenerator from '@/components/ai/EncouragementGenerator.vue'
+import SupportImageGenerator from '@/components/ai/SupportImageGenerator.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -302,6 +304,11 @@ watch(shareMessage, () => {
             <p v-else-if="shareStatus === 'success'" class="text-xs text-emerald-500">成功分享！可前往留言牆查看。</p>
           </div>
         </div>
+        <div class="grid gap-4 md:grid-cols-2">
+          <EncouragementGenerator />
+          <SupportImageGenerator />
+        </div>
+
 
         <div class="flex flex-wrap items-center justify-center gap-4">
           <button
