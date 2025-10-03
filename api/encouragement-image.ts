@@ -5,15 +5,29 @@ const TOKEN = process.env.HUGGINGFACE_API_KEY
   || process.env.HF_API_TOKEN
   || process.env.HF_TOKEN
 
-const IMAGE_MODEL = process.env.HF_IMAGE_MODEL_ID || 'stabilityai/stable-diffusion-2-1'
-const MAX_PROMPT_LENGTH = Number(process.env.HF_IMAGE_PROMPT_LIMIT || 280)
-const NEGATIVE_FALLBACK = 'blurry, watermark, text, logo, low quality, distorted, disfigured, nsfw'
+const IMAGE_MODEL = process.env.HF_IMAGE_MODEL_ID || 'stabilityai/stable-diffusion-xl-base-1.0'
+const MAX_PROMPT_LENGTH = Number(process.env.HF_IMAGE_PROMPT_LIMIT || 320)
+const DEFAULT_WIDTH = Number(process.env.HF_IMAGE_WIDTH || 1024)
+const DEFAULT_HEIGHT = Number(process.env.HF_IMAGE_HEIGHT || 1024)
+const MIN_DIMENSION = Number(process.env.HF_IMAGE_MIN_DIMENSION || 512)
+const MAX_DIMENSION = Number(process.env.HF_IMAGE_MAX_DIMENSION || 1536)
+const NEGATIVE_FALLBACK = process.env.HF_IMAGE_NEGATIVE_PROMPT
+  || 'blurry, watermark, text, logo, low quality, distorted, disfigured, nsfw'
 
 interface ImageRequestBody {
   prompt: string
   negativePrompt?: string | null
   guidanceScale?: number
   steps?: number
+  width?: number
+  height?: number
+}
+
+function clampDimension(value: number | undefined, fallback: number) {
+  if (!Number.isFinite(value ?? NaN)) return fallback
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback
+  return Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(numeric)))
 }
 
 function parseBody(req: VercelRequest): ImageRequestBody {
@@ -35,12 +49,16 @@ function parseBody(req: VercelRequest): ImageRequestBody {
   const negativePrompt = typeof raw?.negativePrompt === 'string' ? raw.negativePrompt.trim() : undefined
   const guidanceScale = Number(raw?.guidanceScale)
   const steps = Number(raw?.steps)
+  const width = Number(raw?.width)
+  const height = Number(raw?.height)
 
   return {
     prompt,
     negativePrompt,
     guidanceScale: Number.isFinite(guidanceScale) ? guidanceScale : undefined,
-    steps: Number.isFinite(steps) ? steps : undefined
+    steps: Number.isFinite(steps) ? steps : undefined,
+    width: Number.isFinite(width) ? width : undefined,
+    height: Number.isFinite(height) ? height : undefined
   }
 }
 
@@ -54,7 +72,7 @@ function ensureToken(): string {
 async function callHuggingFace(
   modelId: string,
   payload: Record<string, unknown>,
-  timeoutMs = 40000
+  timeoutMs = 60000
 ): Promise<Buffer> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -78,6 +96,9 @@ async function callHuggingFace(
         }
       } catch {
         // ignore
+      }
+      if (response.status === 403 || response.status === 404) {
+        message = `${message}. Verify that your token can access ${modelId} (accept the model licence on Hugging Face).`
       }
       const err = new Error(message)
       ;(err as any).status = response.status
@@ -122,9 +143,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const guidance = body.guidanceScale && body.guidanceScale > 0 ? Math.min(14, Math.max(1, body.guidanceScale)) : 7.5
-  const steps = body.steps && body.steps > 0 ? Math.min(50, Math.max(10, Math.round(body.steps))) : 30
+  const guidance = body.guidanceScale && body.guidanceScale > 0 ? Math.min(15, Math.max(1, body.guidanceScale)) : 7.5
+  const steps = body.steps && body.steps > 0 ? Math.min(60, Math.max(15, Math.round(body.steps))) : 35
   const negativePrompt = body.negativePrompt && body.negativePrompt.length >= 3 ? body.negativePrompt : NEGATIVE_FALLBACK
+  const width = clampDimension(body.width, DEFAULT_WIDTH)
+  const height = clampDimension(body.height, DEFAULT_HEIGHT)
 
   try {
     const started = Date.now()
@@ -133,7 +156,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parameters: {
         negative_prompt: negativePrompt,
         guidance_scale: guidance,
-        num_inference_steps: steps
+        num_inference_steps: steps,
+        width,
+        height
       }
     })
     const durationMs = Date.now() - started
@@ -144,6 +169,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       guidanceScale: guidance,
       steps,
       negativePrompt,
+      width,
+      height,
       imageBase64: `data:image/png;base64,${base64}`,
       timings: { durationMs }
     })

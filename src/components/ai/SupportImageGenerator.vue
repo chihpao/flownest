@@ -53,9 +53,6 @@
       <div class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
         <img :src="latest.imageBase64" :alt="`AI 圖像 ${formatDate(latest.createdAt)}`" class="h-auto w-full object-cover" />
       </div>
-      <figcaption class="text-[11px] text-slate-500">
-        {{ formatDate(latest.createdAt) }} ・ 提示：「{{ latest.prompt }}」 ・ 模型：{{ latest.model }}
-      </figcaption>
     </figure>
 
     <div v-if="showHistory && history.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -67,7 +64,6 @@
         <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
           <img :src="entry.imageBase64" :alt="`過往生成 ${formatDate(entry.createdAt)}`" class="h-28 w-full object-cover" />
         </div>
-        <figcaption class="text-[10px] text-slate-500 truncate">{{ entry.prompt }}</figcaption>
       </figure>
     </div>
     <p v-else-if="showHistory" class="text-xs text-slate-400">暫無歷史紀錄。</p>

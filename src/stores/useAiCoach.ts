@@ -22,6 +22,8 @@ export interface SupportImageEntry {
   guidanceScale: number
   steps: number
   negativePrompt?: string
+  width?: number
+  height?: number
   createdAt: string
   durationMs?: number
 }
@@ -85,6 +87,8 @@ function mapImageResponse(prompt: string, data: ImageResponse): SupportImageEntr
     guidanceScale: data.guidanceScale,
     steps: data.steps,
     negativePrompt: data.negativePrompt,
+    width: data.width,
+    height: data.height,
     createdAt: safeNow(),
     durationMs: data.timings?.durationMs
   }

@@ -20,6 +20,8 @@ export interface ImageRequest {
   negativePrompt?: string
   guidanceScale?: number
   steps?: number
+  width?: number
+  height?: number
 }
 
 export interface ImageResponse {
@@ -28,6 +30,8 @@ export interface ImageResponse {
   guidanceScale: number
   steps: number
   negativePrompt?: string
+  width?: number
+  height?: number
   imageBase64: string
   timings?: { durationMs?: number }
 }
