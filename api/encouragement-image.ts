@@ -30,12 +30,15 @@ function clampDimension(value: number | undefined, fallback: number) {
   return Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(numeric)))
 }
 
+type VercelRequestWithRawBody = VercelRequest & { rawBody?: Buffer }
+
 function parseBody(req: VercelRequest): ImageRequestBody {
+  const incoming = req as VercelRequestWithRawBody
   const raw = ((): any => {
-    if (req.body) return req.body
-    if (!req.rawBody) return {}
+    if (incoming.body) return incoming.body
+    if (!incoming.rawBody) return {}
     try {
-      return JSON.parse(req.rawBody.toString('utf8'))
+      return JSON.parse(incoming.rawBody.toString('utf8'))
     } catch {
       return {}
     }

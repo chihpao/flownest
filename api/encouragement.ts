@@ -1,14 +1,29 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { InferenceClient, type InferenceProviderOrPolicy } from '@huggingface/inference'
+import { tify } from 'chinese-conv/dist'
 
 const TOKEN = process.env.HUGGINGFACE_API_KEY
   || process.env.HUGGINGFACEHUB_API_TOKEN
   || process.env.HF_API_TOKEN
   || process.env.HF_TOKEN
 
-const TEXT_MODEL = process.env.HF_TEXT_MODEL_ID || 'monsoon-nlp/gpt-nyc-affirmations'
+const TEXT_MODEL = process.env.HF_TEXT_MODEL_ID || 'zai-org/GLM-4.6'
+const TEXT_PROVIDER = ((process.env.HF_TEXT_PROVIDER ?? 'novita') as InferenceProviderOrPolicy)
 const TRANSLATE_MODEL = process.env.HF_TRANSLATE_MODEL_ID || 'Helsinki-NLP/opus-mt-en-zh'
 const MAX_PROMPT_LENGTH = Number(process.env.HF_PROMPT_LIMIT || 320)
 const DEFAULT_LOCALE = 'zh'
+const DEFAULT_FALLBACK = 'You have what it takes to grow through this moment.'
+const SYSTEM_PROMPT = process.env.HF_TEXT_SYSTEM_PROMPT ||
+  'You are a compassionate bilingual coach called FlowNest. Keep replies to one or two sentences, warm, concrete, and action-oriented. Avoid questions and emoji.'
+
+let cachedClient: InferenceClient | null = null
+
+function getClient(): InferenceClient {
+  if (!cachedClient) {
+    cachedClient = new InferenceClient(ensureToken())
+  }
+  return cachedClient
+}
 
 interface NormalizedBody {
   prompt: string
@@ -25,12 +40,15 @@ function normalizeLocale(raw?: string | null): string {
   return DEFAULT_LOCALE
 }
 
+type VercelRequestWithRawBody = VercelRequest & { rawBody?: Buffer }
+
 function parseBody(req: VercelRequest): NormalizedBody {
+  const incoming = req as VercelRequestWithRawBody
   const body = ((): any => {
-    if (req.body) return req.body
-    if (!req.rawBody) return {}
+    if (incoming.body) return incoming.body
+    if (!incoming.rawBody) return {}
     try {
-      return JSON.parse(req.rawBody.toString('utf8'))
+      return JSON.parse(incoming.rawBody.toString('utf8'))
     } catch {
       return {}
     }
@@ -95,37 +113,68 @@ async function callHuggingFace(
   }
 }
 
-function stripSourcePrompt(prompt: string, generated: string): string {
-  if (!generated) return ''
-  if (!prompt) return generated.trim()
-  if (generated.startsWith(prompt)) {
-    return generated.slice(prompt.length).trim()
+function extractMessageContent(message: any): { text: string; raw: string } {
+  if (!message) return { text: '', raw: '' }
+  const { content } = message
+  if (typeof content === 'string') {
+    return { text: content.trim(), raw: content }
   }
-  return generated.trim()
+  if (Array.isArray(content)) {
+    const strings = content.map((part) => {
+      if (typeof part === 'string') return part
+      if (typeof part?.text === 'string') return part.text
+      if (typeof part?.value === 'string') return part.value
+      return ''
+    })
+    const joined = strings.join(' ').trim()
+    return {
+      text: joined,
+      raw: JSON.stringify(content)
+    }
+  }
+  if (content && typeof content === 'object') {
+    const text = typeof content.text === 'string'
+      ? content.text
+      : typeof content.value === 'string'
+        ? content.value
+        : ''
+    return {
+      text: text.trim(),
+      raw: JSON.stringify(content)
+    }
+  }
+  if (typeof message === 'string') {
+    return { text: message.trim(), raw: message }
+  }
+  return { text: '', raw: String(message) }
 }
 
 async function generateAffirmation(prompt: string): Promise<{ english: string; raw: string }> {
-  const scaffold = `Act as a compassionate coach. Offer one to two sentences that are specific, actionable, and uplifting. Avoid questions and keep the tone warm. User request: ${prompt}\nCoach:`
-  const payload = {
-    inputs: scaffold,
-    parameters: {
-      max_new_tokens: 80,
-      temperature: 0.8,
-      top_p: 0.92,
-      do_sample: true
+  const client = getClient()
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    {
+      role: 'user',
+      content: `Context: ${prompt}\nReminder: respond in English first, 1-2 sentences, compassionate, no questions, no emoji.`
     }
-  }
+  ]
 
-  const data = await callHuggingFace(TEXT_MODEL, payload)
-  const generatedText = Array.isArray(data) && data[0]?.generated_text
-    ? String(data[0].generated_text)
-    : typeof data?.generated_text === 'string'
-      ? data.generated_text
-      : ''
-  const clean = stripSourcePrompt(scaffold, generatedText)
+  const completion = await client.chatCompletion({
+    provider: TEXT_PROVIDER,
+    model: TEXT_MODEL,
+    messages,
+    temperature: 0.8,
+    top_p: 0.92,
+    max_tokens: 180
+  })
+
+  const choice = completion?.choices?.find((c: any) => c.finish_reason === 'stop') ?? completion?.choices?.[0]
+  const { text, raw } = extractMessageContent(choice?.message)
+  const trimmed = text.trim()
+
   return {
-    english: clean || generatedText?.trim() || 'You have what it takes to grow through this moment.',
-    raw: generatedText
+    english: trimmed || DEFAULT_FALLBACK,
+    raw: raw || (choice ? JSON.stringify(choice) : '')
   }
 }
 
@@ -140,7 +189,12 @@ async function translateToChinese(text: string): Promise<string> {
   const output = Array.isArray(data) && data[0]?.translation_text
     ? String(data[0].translation_text)
     : ''
-  return output || text
+  const base = output || text
+  try {
+    return tify(base)
+  } catch {
+    return base
+  }
 }
 
 function sendJson(res: VercelResponse, status: number, payload: Record<string, unknown>) {

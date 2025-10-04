@@ -53,13 +53,7 @@
     <p v-if="store.encouragementError" class="text-xs text-rose-500">{{ store.encouragementError }}</p>
 
     <div v-if="latest" class="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">最新鼓勵</p>
-      <p class="text-sm font-semibold text-emerald-800">{{ displayText(latest) }}</p>
-      <p v-if="latest.translatedText && locale === 'zh'" class="text-xs text-emerald-600/90">原文：{{ latest.englishText }}</p>
-      <p class="text-[10px] text-emerald-500/80">
-        生成時間：{{ formatDate(latest.createdAt) }} ・ 模型：{{ latest.model }}
-        <span v-if="latest.durationMs"> ・ {{ Math.round(latest.durationMs) }}ms</span>
-      </p>
+      <p class="text-sm font-semibold text-emerald-800 whitespace-pre-line">{{ displayText(latest) }}</p>
     </div>
 
     <ul v-if="showHistory && history.length" class="space-y-2 text-xs text-slate-500">

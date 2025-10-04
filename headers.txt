@@ -1,19 +1,20 @@
-HTTP/1.1 404 Not Found
-Content-Type: text/plain; charset=utf-8
-Content-Length: 9
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+Content-Length: 55
 Connection: keep-alive
-Date: Fri, 03 Oct 2025 09:43:30 GMT
-x-inference-provider: hf-inference
+Date: Sat, 04 Oct 2025 06:56:05 GMT
+ETag: W/"37-2rNK07tH7ceN3XGTWwIATU5bonw"
 X-Powered-By: huggingface-moon
-vary: origin, access-control-request-method, access-control-request-headers
+Vary: Origin
 Access-Control-Allow-Origin: *
 Access-Control-Expose-Headers: X-Repo-Commit,X-Request-Id,X-Error-Code,X-Error-Message,X-Total-Count,ETag,Link,Accept-Ranges,Content-Range,X-Linked-Size,X-Linked-ETag,X-Xet-Hash
 cross-origin-opener-policy: same-origin
 Referrer-Policy: strict-origin-when-cross-origin
-x-request-id: Root=1-68df9ac2-2c57a647716f0f1d1d12ad76
-access-control-allow-credentials: true
+X-Request-Id: Root=1-68e0c505-1282788d04996ca93b291a82
+X-Error-Message: Invalid credentials in Authorization header
+WWW-Authenticate: Bearer realm="Authentication required", charset="UTF-8"
 X-Cache: Error from cloudfront
-Via: 1.1 5e81f443cccdfc054b636a6a258d1f4e.cloudfront.net (CloudFront)
-X-Amz-Cf-Pop: SIN2-P9
-X-Amz-Cf-Id: zZGHoZuZgnhzcOear13kuvs6PUaH3lcQHkrZyH07-mRcDxLYK4bgDw==
+Via: 1.1 ca3bf68a860177172a2594b93582c1d4.cloudfront.net (CloudFront)
+X-Amz-Cf-Pop: TPE54-P1
+X-Amz-Cf-Id: z9_6bboJd3Qfa37LRneDlSfpXzUnNfGmJMyHl6oNv6N9ELpGSejR2g==
 

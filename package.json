@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@huggingface/inference": "^4.11.0",
+    "chinese-conv": "^3.0.1",
     "firebase": "^12.3.0",
     "pinia": "^3.0.3",
     "three": "^0.132.2",
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@types/node": "^24.3.1",
     "@types/three": "^0.180.0",
+    "@vercel/node": "^2.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",
     "autoprefixer": "^10.4.21",
