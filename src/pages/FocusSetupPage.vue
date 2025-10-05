@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import BgmControl from '@/components/BgmControl.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import { useBgm } from '@/components/useBgm'
 import { AMBIENT_TRACKS, findAmbientById } from '@/config/sessionPresets'
 
 const router = useRouter()
-const { isPlaying, play: playBgm, setSource } = useBgm()
+const { isPlaying, play: playBgm, setSource, source } = useBgm()
 
 const title = ref('')
 const presetDurations = [15, 30, 45]
@@ -47,7 +46,16 @@ const isCustomValid = computed(() => parsedCustom.value !== null && !Number.isNa
 const canStart = computed(() => effectiveMinutes.value !== null)
 
 onMounted(() => {
-  setSource(selectedAmbient.value.url).catch(() => {})
+  const current = source.value
+  const matched = current ? AMBIENT_TRACKS.find((track) => current.includes(track.url)) : null
+  if (matched) {
+    selectedAmbientId.value = matched.id
+    return
+  }
+  const desired = selectedAmbient.value.url
+  if (!current || !current.includes(desired)) {
+    setSource(desired).catch(() => {})
+  }
 })
 
 function handleTimeSelect(minutes: number) {
@@ -87,19 +95,7 @@ async function handleStart() {
 
 <template>
   <main class="relative min-h-screen w-full bg-gradient-to-b from-white via-emerald-50/40 to-slate-50 px-4 pb-28 pt-[env(safe-area-inset-top)] sm:px-6 sm:pb-[env(safe-area-inset-bottom)]">
-    <div class="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4 sm:absolute sm:inset-auto sm:right-4 sm:top-4 sm:bottom-auto sm:justify-end sm:px-0">
-      <BgmControl />
-    </div>
-
     <section class="mx-auto flex w-full max-w-6xl flex-col gap-10">
-      <header class="space-y-3 text-center">
-        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.25em] text-emerald-600">專注儀式</span>
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">安排一段理想的專注時光</h1>
-        <p class="mx-auto max-w-2xl text-base leading-relaxed text-slate-600">
-          未登入也能完整體驗。專注完成後會先保存於瀏覽器，登入帳號時系統會自動把成果同步到你的專注紀錄。
-        </p>
-      </header>
-
       <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <article class="space-y-6 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-sm">
           <div class="space-y-3">

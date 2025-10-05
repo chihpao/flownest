@@ -83,14 +83,6 @@ function setView(mode: ViewMode) {
 <template>
   <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
     <section class="mx-auto w-full max-w-5xl space-y-8 rounded-3xl border border-emerald-100 bg-white/90 p-8 shadow-xl shadow-emerald-100/50 backdrop-blur-sm">
-      <header class="space-y-2 text-center">
-        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.25em] text-emerald-600">FOCUS JOURNAL</span>
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">你的專注成果紀錄</h1>
-        <p class="text-sm text-slate-600">
-          {{ sessions.isGuest ? '目前以體驗模式保存，登入後會自動同步到帳號。' : '已與帳號同步，跨裝置都能看到最新紀錄。' }}
-        </p>
-      </header>
-
       <div v-if="!hasSessions" class="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-6 text-center text-sm text-emerald-700">
         <p>尚未建立任何專注紀錄。</p>
         <PrimaryButton label="開始第一段專注" @click="startAnother" class="mx-auto" />

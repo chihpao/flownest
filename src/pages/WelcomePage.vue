@@ -14,9 +14,6 @@ import BackgroundWaves from '@/components/BackgroundWaves.vue'
         <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
           <div class="space-y-8">
             <div class="space-y-4">
-              <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold tracking-[0.3em] text-emerald-600">
-                WELCOME TO FLOWNEST
-              </span>
               <h1 class="text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
                 專注的節奏，由你決定
               </h1>

@@ -354,15 +354,6 @@ onBeforeUnmount(() => {
   <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 pb-24 pt-[env(safe-area-inset-top)]">
     <section class="mx-auto w-full max-w-6xl space-y-10 px-4 sm:px-6 lg:px-8">
       <header class="flex flex-col gap-4 text-left md:flex-row md:items-end md:justify-between">
-        <div class="space-y-2">
-          <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.35em] text-emerald-600">MESSAGES</span>
-          <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">私人即時聊天</h1>
-            <p class="mt-2 max-w-2xl text-sm text-slate-600">
-              與專注夥伴保持連結，分享進度、交換靈感或互相打氣。追蹤的夥伴會出現在左側列表中，點擊即可展開對話。
-            </p>
-          </div>
-        </div>
         <router-link
           v-if="isAuthed"
           to="/wall"

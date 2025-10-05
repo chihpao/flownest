@@ -304,25 +304,6 @@ watch(() => auth.user?.uid, async () => {
 <template>
   <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 pb-24 pt-[env(safe-area-inset-top)]">
     <section class="mx-auto w-full max-w-6xl space-y-10 px-4 sm:px-6 lg:px-8">
-      <header class="flex flex-col gap-4 text-left md:flex-row md:items-end md:justify-between">
-        <div class="space-y-2">
-          <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.35em] text-emerald-600">COMMUNITY</span>
-          <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">流動留言牆</h1>
-            <p class="mt-2 max-w-2xl text-sm text-slate-600">
-              {{ isAuthed
-                ? '分享你完成專注後的心得，也看看夥伴們如何保持節奏。'
-                : '先完成一段專注再回來分享吧！登入後可快速分享你的成果。' }}
-            </p>
-          </div>
-        </div>
-        <router-link
-          to="/timer"
-          class="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-400"
-        >
-          開始一段專注
-        </router-link>
-      </header>
 
       <div class="grid gap-8 lg:grid-cols-[minmax(0,1.65fr)_minmax(260px,1fr)] lg:items-start">
         <div class="space-y-6">
