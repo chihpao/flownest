@@ -83,6 +83,8 @@ const enabled = ref(getDefaultEnabled())
 const volume = ref(getDefaultVolume())
 const isPlaying = ref(false)
 const source = ref<string>('')
+const currentTime = ref(0)
+const duration = ref<number | null>(null)
 
 let retryCount = 0
 const maxRetries = 3
@@ -99,11 +101,29 @@ function syncSourceFromAudio() {
   }
 }
 
+function syncPlaybackMetrics() {
+  if (!audio) {
+    currentTime.value = 0
+    duration.value = null
+    return
+  }
+
+  const time = Number.isFinite(audio.currentTime) && audio.currentTime >= 0 ? audio.currentTime : 0
+  currentTime.value = time
+
+  const rawDuration = audio.duration
+  duration.value = Number.isFinite(rawDuration) && rawDuration > 0 && rawDuration !== Infinity ? rawDuration : null
+}
+
 function bindAudioListeners(target: HTMLAudioElement) {
   if (listenersBound) return
   target.addEventListener('play', onPlay)
   target.addEventListener('pause', onPause)
   target.addEventListener('playing', onPlaying)
+  target.addEventListener('timeupdate', onTimeUpdate)
+  target.addEventListener('loadedmetadata', onDurationChange)
+  target.addEventListener('durationchange', onDurationChange)
+  target.addEventListener('ended', onEnded)
   target.addEventListener('stalled', onErrorOrStalled)
   target.addEventListener('error', onErrorOrStalled)
   listenersBound = true
@@ -114,6 +134,10 @@ function releaseAudioListeners(target: HTMLAudioElement) {
   target.removeEventListener('play', onPlay)
   target.removeEventListener('pause', onPause)
   target.removeEventListener('playing', onPlaying)
+  target.removeEventListener('timeupdate', onTimeUpdate)
+  target.removeEventListener('loadedmetadata', onDurationChange)
+  target.removeEventListener('durationchange', onDurationChange)
+  target.removeEventListener('ended', onEnded)
   target.removeEventListener('stalled', onErrorOrStalled)
   target.removeEventListener('error', onErrorOrStalled)
   listenersBound = false
@@ -129,6 +153,7 @@ function ensureReadyAudio() {
     a.volume = volume.value
   }
   syncSourceFromAudio()
+  syncPlaybackMetrics()
   return a
 }
 
@@ -140,6 +165,7 @@ async function play() {
     isPlaying.value = true
     enabled.value = true
     try { localStorage.setItem(ENABLED_KEY, '1') } catch {}
+    syncPlaybackMetrics()
   } catch {
     isPlaying.value = false
   }
@@ -151,6 +177,7 @@ function pause() {
   isPlaying.value = false
   enabled.value = false
   try { localStorage.setItem(ENABLED_KEY, '0') } catch {}
+  syncPlaybackMetrics()
 }
 
 function toggle() {
@@ -176,6 +203,8 @@ async function setSource(url: string) {
   a.pause()
   a.src = url
   syncSourceFromAudio()
+  currentTime.value = 0
+  duration.value = null
   retryCount = 0
   const idx = DEFAULT_SOURCES.findIndex((u) => u === url)
   if (idx >= 0) fallbackIndex = idx
@@ -184,6 +213,7 @@ async function setSource(url: string) {
     try {
       await a.play()
       isPlaying.value = true
+      syncPlaybackMetrics()
     } catch {
       isPlaying.value = false
     }
@@ -194,16 +224,33 @@ const onPlay = () => {
   isPlaying.value = true
   enabled.value = true
   try { localStorage.setItem(ENABLED_KEY, '1') } catch {}
+  syncPlaybackMetrics()
 }
 
 const onPause = () => {
   isPlaying.value = false
   enabled.value = false
   try { localStorage.setItem(ENABLED_KEY, '0') } catch {}
+  syncPlaybackMetrics()
 }
 
 const onPlaying = () => {
   retryCount = 0
+}
+
+const onTimeUpdate = () => {
+  syncPlaybackMetrics()
+}
+
+const onDurationChange = () => {
+  syncPlaybackMetrics()
+}
+
+const onEnded = () => {
+  if (audio && !audio.loop) {
+    isPlaying.value = false
+  }
+  syncPlaybackMetrics()
 }
 
 const onErrorOrStalled = async () => {
@@ -238,11 +285,30 @@ const onErrorOrStalled = async () => {
       audio.load()
       await audio.play()
       isPlaying.value = true
+      syncPlaybackMetrics()
       retryCount++
     } catch {
       retryCount++
     }
   }, delay)
+}
+
+function seekTo(seconds: number) {
+  const a = ensureReadyAudio()
+  if (!a) return
+  if (!Number.isFinite(seconds) || seconds < 0) return
+
+  const finiteDuration = Number.isFinite(a.duration) && a.duration !== Infinity && a.duration > 0
+  const maxDuration = finiteDuration ? a.duration : null
+  const target = maxDuration != null ? Math.min(seconds, maxDuration) : seconds
+
+  try {
+    a.currentTime = target
+  } catch {
+    return
+  }
+
+  syncPlaybackMetrics()
 }
 
 export function useBgm() {
@@ -269,10 +335,13 @@ export function useBgm() {
     volume,
     isPlaying,
     source,
+    currentTime,
+    duration,
     play,
     pause,
     toggle,
     setVolume: setVolumeValue,
     setSource,
+    seekTo,
   }
 }
