@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import PrimaryButton from '@/components/PrimaryButton.vue'
 import NumberCard from '@/components/stats/NumberCard.vue'
 import PieChart from '@/components/stats/PieChart.vue'
 import TrendChart from '@/components/stats/TrendChart.vue'
@@ -17,7 +15,6 @@ import {
 
 type ViewMode = 'dashboard' | 'list'
 
-const router = useRouter()
 const sessions = useSessions()
 const viewMode = ref<ViewMode>('dashboard')
 
@@ -51,10 +48,10 @@ const recentWeeks = computed(() => groupByWeek(sessions.items)
 
 const latestDescription = computed(() => {
   const latest = sessions.latestSession
-  if (!latest) return '最近尚無完成紀錄'
+  if (!latest) return '最近尚未有專注紀錄'
   const millis = sessionStatsHelpers.toMillis(latest.finishedAt)
-  if (!millis) return '最近尚無完成紀錄'
-  return `最近一筆完成於 ${new Date(millis).toLocaleString()}`
+  if (!millis) return '最近尚未有專注紀錄'
+  return `最近一筆紀錄完成於 ${new Date(millis).toLocaleString()}`
 })
 
 const listSessions = computed(() => sessions.items.map((item) => {
@@ -64,16 +61,12 @@ const listSessions = computed(() => sessions.items.map((item) => {
     title: item.title,
     minutesPlanned: item.minutesPlanned,
     minutesActual: item.minutesActual,
-    finishedLabel: finishedAt ? new Date(finishedAt).toLocaleString() : '—',
+    finishedLabel: finishedAt ? new Date(finishedAt).toLocaleString() : '時間未知',
     source: item.source,
   }
 }))
 
 const hasSessions = computed(() => totalSessions.value > 0)
-
-function startAnother() {
-  router.push({ name: 'setup' }).catch(() => {})
-}
 
 function setView(mode: ViewMode) {
   viewMode.value = mode
@@ -81,84 +74,94 @@ function setView(mode: ViewMode) {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-    <section class="mx-auto w-full max-w-5xl space-y-8 rounded-3xl border border-emerald-100 bg-white/90 p-8 shadow-xl shadow-emerald-100/50 backdrop-blur-sm">
-      <div v-if="!hasSessions" class="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-6 text-center text-sm text-emerald-700">
-        <p>尚未建立任何專注紀錄。</p>
-        <PrimaryButton label="開始第一段專注" @click="startAnother" class="mx-auto" />
-      </div>
+  <main class="relative min-h-screen px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] pt-[calc(env(safe-area-inset-top)+5rem)] sm:px-6 lg:px-8">
+    <div class="pointer-events-none absolute inset-x-0 top-12 -z-10 h-64 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_65%)]"></div>
 
-      <template v-else>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 p-1 text-sm text-emerald-600">
-            <button
-              type="button"
-              class="rounded-full px-4 py-1.5 transition"
-              :class="viewMode === 'dashboard' ? 'bg-emerald-500 text-white shadow' : 'hover:bg-emerald-100'"
-              @click="setView('dashboard')"
-            >儀表板</button>
-            <button
-              type="button"
-              class="rounded-full px-4 py-1.5 transition"
-              :class="viewMode === 'list' ? 'bg-emerald-500 text-white shadow' : 'hover:bg-emerald-100'"
-              @click="setView('list')"
-            >條列</button>
-          </div>
-          <PrimaryButton label="再開始一段專注" @click="startAnother" class="w-auto" />
+    <section class="mx-auto flex w-full max-w-6xl flex-col gap-10">
+      <header class="space-y-3 text-center animate-fade-up">
+        <p class="text-xs font-semibold uppercase tracking-[0.45em] text-emerald-500">Focus Records</p>
+        <h1 class="text-3xl font-bold text-slate-900 sm:text-4xl">成效紀錄</h1>
+        <p class="text-sm text-slate-500">檢視你累積的專注足跡，保持節奏與成長。</p>
+      </header>
+
+      <div class="glass-panel animate-fade-scale space-y-8 p-6 sm:p-8">
+        <div v-if="!hasSessions" class="space-y-3 text-center text-sm text-emerald-700">
+          <p>尚未建立任何專注紀錄。</p>
+          <p class="text-xs text-emerald-500">完成一段專注後就會自動累積在這裡，持續加油！</p>
         </div>
 
-        <div v-if="viewMode === 'dashboard'" class="space-y-8">
-          <div class="grid gap-6 md:grid-cols-3">
-            <NumberCard label="完成次數" :value="`${totalSessions}`" :description="latestDescription" />
-            <NumberCard label="累計專注時間" :value="totalMinutesLabel" :description="`共 ${totalMinutes} 分鐘`" />
-            <NumberCard label="平均每次專注" :value="`${averageMinutes} 分鐘`" description="保持節奏，成效更穩定" />
-          </div>
-
-          <div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
-            <PieChart :data="durationSlices" />
-            <TrendChart title="最近 6 週總專注分鐘" :points="recentWeeks" />
-          </div>
-
-          <div class="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-6">
-            <h2 class="text-lg font-semibold text-emerald-700">最近 7 天專注趨勢（分鐘）</h2>
-            <div v-if="lastSevenDays.length" class="mt-4 grid gap-3 md:grid-cols-2">
-              <div
-                v-for="day in lastSevenDays"
-                :key="day.label"
-                class="flex items-center justify-between rounded-2xl border border-emerald-100 bg-white/80 px-4 py-3 text-sm text-emerald-700"
-              >
-                <span>{{ day.label }}</span>
-                <span class="font-semibold">{{ Math.round(day.value) }} 分鐘</span>
-              </div>
+        <template v-else>
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="chip-toggle">
+              <button
+                type="button"
+                class="rounded-full px-4 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                :class="viewMode === 'dashboard' ? 'bg-emerald-500 text-white shadow' : 'hover:bg-white/90 hover:text-emerald-600'"
+                @click="setView('dashboard')"
+              >儀表板</button>
+              <button
+                type="button"
+                class="rounded-full px-4 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                :class="viewMode === 'list' ? 'bg-emerald-500 text-white shadow' : 'hover:bg-white/90 hover:text-emerald-600'"
+                @click="setView('list')"
+              >條列</button>
             </div>
-            <p v-else class="mt-4 text-xs text-emerald-500">最近七天沒有專注紀錄。</p>
+            <span class="text-xs text-slate-500">{{ latestDescription }}</span>
           </div>
-        </div>
 
-        <div v-else class="space-y-6">
-          <ul class="space-y-4">
-            <li
-              v-for="session in listSessions"
-              :key="session.id"
-              class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm"
-            >
-              <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 class="text-lg font-semibold text-slate-900">{{ session.title }}</h2>
-                  <p class="text-xs text-slate-500">完成於 {{ session.finishedLabel }}</p>
-                </div>
-                <div class="flex flex-wrap gap-2 text-sm text-slate-600">
-                  <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">實際 {{ session.minutesActual }} 分鐘</span>
-                  <span class="rounded-full bg-slate-100 px-3 py-1">計畫 {{ session.minutesPlanned }} 分鐘</span>
-                  <span class="rounded-full bg-slate-100 px-3 py-1">
-                    {{ session.source === 'guest' ? '本機紀錄' : '雲端同步' }}
-                  </span>
+          <div v-if="viewMode === 'dashboard'" class="space-y-8">
+            <div class="grid gap-6 md:grid-cols-3">
+              <NumberCard label="完成次數" :value="`${totalSessions}`" :description="latestDescription" />
+              <NumberCard label="累積專注時數" :value="totalMinutesLabel" :description="`共 ${totalMinutes} 分鐘`" />
+              <NumberCard label="平均每次專注" :value="`${averageMinutes} 分鐘`" description="保持節奏，穩穩往前" />
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+              <PieChart :data="durationSlices" />
+              <TrendChart title="最近 6 週總專注時數" :points="recentWeeks" />
+            </div>
+
+            <div class="glass-panel-soft">
+              <h2 class="text-lg font-semibold text-emerald-700">最近 7 天專注趨勢</h2>
+              <div v-if="lastSevenDays.length" class="mt-4 grid gap-3 md:grid-cols-2">
+                <div
+                  v-for="day in lastSevenDays"
+                  :key="day.label"
+                  class="flex items-center justify-between rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3 text-sm text-emerald-700"
+                >
+                  <span>{{ day.label }}</span>
+                  <span class="font-semibold">{{ Math.round(day.value) }} 分鐘</span>
                 </div>
               </div>
-            </li>
-          </ul>
-        </div>
-      </template>
+              <p v-else class="mt-4 text-xs text-emerald-500">最近七天沒有專注紀錄</p>
+            </div>
+          </div>
+
+          <div v-else class="space-y-5">
+            <ul class="space-y-4">
+              <li
+                v-for="session in listSessions"
+                :key="session.id"
+                class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div class="space-y-1">
+                    <h2 class="text-lg font-semibold text-slate-900">{{ session.title }}</h2>
+                    <p class="text-xs text-slate-500">完成於 {{ session.finishedLabel }}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2 text-sm text-slate-600">
+                    <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">實際 {{ session.minutesActual }} 分鐘</span>
+                    <span class="rounded-full bg-slate-100 px-3 py-1">計畫 {{ session.minutesPlanned }} 分鐘</span>
+                    <span class="rounded-full bg-slate-100 px-3 py-1">
+                      {{ session.source === 'guest' ? '暫存紀錄' : '雲端同步' }}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </template>
+      </div>
     </section>
   </main>
 </template>

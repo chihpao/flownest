@@ -1,9 +1,20 @@
 <!-- cspell:ignore highp mediump metalness clearcoat hemi -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 
 const container = ref<HTMLDivElement | null>(null)
+
+const props = defineProps<{ paletteIndex?: number }>()
+let desiredFilterIndex = typeof props.paletteIndex === 'number' ? props.paletteIndex : 0
+let rendererReady = false
+
+watch(() => props.paletteIndex, (value) => {
+  desiredFilterIndex = typeof value === 'number' ? value : 0
+  if (rendererReady) {
+    applyFilter(desiredFilterIndex)
+  }
+})
 
 // three.js 物件
 let renderer: THREE.WebGLRenderer | null = null
@@ -23,6 +34,26 @@ let startTime = 0
 
 // 滑鼠互動（容器座標轉 -1~1）
 const mousePos = { x: 0, y: 0 }
+
+const FILTER_PRESETS = [
+  'none',
+  'hue-rotate(48deg) saturate(1.08)',
+  'hue-rotate(120deg) saturate(1.04)',
+  'hue-rotate(200deg) saturate(1.15)',
+  'hue-rotate(310deg) saturate(1.12)'
+]
+
+function applyFilter(value: number) {
+  const total = FILTER_PRESETS.length || 1
+  const normalized = ((Math.round(value) % total) + total) % total
+  desiredFilterIndex = normalized
+  if (renderer && renderer.domElement) {
+    renderer.domElement.style.filter = FILTER_PRESETS[normalized]
+    if (!renderer.domElement.style.transition?.includes('filter')) {
+      renderer.domElement.style.transition = (renderer.domElement.style.transition ? renderer.domElement.style.transition + ', ' : '') + 'filter 0.6s ease'
+    }
+  }
+}
 
 const getCanvasSize = () => {
   const vw = window.innerWidth
@@ -253,6 +284,8 @@ onMounted(() => {
   renderer.domElement.className = 'w-full h-full rounded-full block'
 
   el.appendChild(renderer.domElement)
+  rendererReady = true
+  applyFilter(desiredFilterIndex)
 
   // Scene & Camera
   scene = new THREE.Scene()
@@ -394,6 +427,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (raf) cancelAnimationFrame(raf)
+
+  rendererReady = false
+  if (renderer && renderer.domElement) {
+    renderer.domElement.style.filter = 'none'
+  }
 
   const el = container.value
   if (el) el.removeEventListener('mousemove', handleMouseMove)

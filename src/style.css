@@ -26,3 +26,73 @@ html, body {
 h1, h2, h3, p {
   margin: 0;
 }
+
+@layer components {
+  .glass-panel {
+    @apply rounded-3xl border border-white/40 bg-white/80 backdrop-blur-xl shadow-xl shadow-emerald-100/40;
+  }
+
+  .glass-panel-soft {
+    @apply rounded-3xl border border-emerald-100/70 bg-emerald-50/80 backdrop-blur-md shadow-lg shadow-emerald-100/40;
+  }
+
+  .chip-toggle {
+    @apply inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50/80 p-1 font-semibold text-emerald-600 shadow-sm;
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.6s ease-out both;
+  }
+
+  .animate-fade-scale {
+    animation: fade-scale 0.65s ease-out both;
+  }
+
+  .animate-glow-loop {
+    animation: glow-loop 6s ease-in-out infinite;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fade-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-loop {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(16, 185, 129, 0.25);
+  }
+}
+
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+}

@@ -13,6 +13,12 @@ const DevTools = () => import('@/views/DevToolsView.vue')
 
 export default createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+    return { left: 0, top: 0 }
+  },
   routes: [
     { path: '/',      name: 'welcome', component: Welcome },
     { path: '/setup', name: 'setup',   component: Setup   },

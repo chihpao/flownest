@@ -91,9 +91,9 @@ async function logout() {
 </script>
 
 <template>
-  <nav class="sticky top-0 z-50 border-b border-white/30 bg-white/80 backdrop-blur">
-    <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
-      <router-link to="/" class="flex items-center gap-2 text-lg font-semibold text-emerald-600">
+  <nav class="sticky top-0 z-50 border-b border-white/40 bg-white/70/90 backdrop-blur-xl shadow-sm shadow-emerald-100/40">
+    <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:py-4 animate-fade-up">
+      <router-link to="/" class="group flex items-center gap-2 text-lg font-semibold text-emerald-600 transition hover:text-emerald-700">
         <span>FlowNest</span>
       </router-link>
 
@@ -102,7 +102,7 @@ async function logout() {
           v-for="item in navItems"
           :key="item.name"
           :to="item.to"
-          class="rounded-full px-4 py-2 transition"
+          class="rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
           :class="isActive(item.name)
             ? 'bg-emerald-500 text-white shadow'
             : 'hover:bg-emerald-100 hover:text-emerald-600'

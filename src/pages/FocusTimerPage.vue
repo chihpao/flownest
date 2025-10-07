@@ -36,6 +36,8 @@ const shareError = ref('')
 const shareStatus = ref<'idle' | 'success' | 'error'>('idle')
 const sharing = ref(false)
 let timerHandle: number | null = null
+const spherePaletteIndex = ref(0)
+const BREATHING_PALETTE_STEPS = 5
 
 const selectedIntent = computed(() => findIntentById(route.query.intent as string | null))
 const selectedAmbient = computed(() => findAmbientById(route.query.ambient as string | null))
@@ -91,10 +93,16 @@ function startCountdownFromRoute() {
   lastSession.value = null
   errorMessage.value = ''
   state.value = 'running'
+  spherePaletteIndex.value = 0
   updateRemaining()
   clearTimer()
   timerHandle = window.setInterval(updateRemaining, 1000)
   return true
+}
+
+function cycleSpherePalette() {
+  if (state.value !== 'running') return
+  spherePaletteIndex.value = (spherePaletteIndex.value + 1) % BREATHING_PALETTE_STEPS
 }
 
 onMounted(() => {
@@ -206,7 +214,7 @@ watch(shareMessage, () => {
 <template>
   <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-sky-50 to-white px-4 pb-24 pt-[env(safe-area-inset-top)] text-slate-900 sm:px-6">
     <section class="mx-auto flex w-full max-w-4xl flex-col gap-10">
-      <header class="space-y-2 text-center">
+      <header class="space-y-2 text-center animate-fade-up">
         <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.2em] text-emerald-600">專注倒數</span>
         <h1 class="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">安排好目標，然後專心完成它</h1>
         <p class="text-sm text-slate-500">
@@ -214,7 +222,7 @@ watch(shareMessage, () => {
         </p>
       </header>
 
-      <div v-if="state === 'running'" class="space-y-8 rounded-3xl border border-emerald-100 bg-white/95 p-8 shadow-xl shadow-emerald-200/60 backdrop-blur-sm">
+      <div v-if="state === 'running'" class="glass-panel animate-fade-scale space-y-8 p-8">
         <div class="flex flex-col items-center gap-2 text-center">
           <p class="text-xs tracking-[0.2em] text-emerald-500">目前進行中</p>
           <h2 class="text-2xl font-semibold text-slate-900 sm:text-3xl">{{ activeTitle }}</h2>
@@ -223,8 +231,16 @@ watch(shareMessage, () => {
 
         <div class="mx-auto flex w-full max-w-sm flex-col items-center gap-6">
           <p class="font-mono text-5xl font-bold tracking-tight text-slate-900">{{ formattedCountdown }}</p>
-          <div class="relative w-full">
-            <ThreeBreathingSphere class="w-full" />
+          <div
+            class="relative w-full cursor-pointer select-none"
+            role="button"
+            tabindex="0"
+            aria-label="切換呼吸球配色"
+            @click="cycleSpherePalette"
+            @keydown.enter.prevent="cycleSpherePalette()"
+            @keydown.space.prevent="cycleSpherePalette()"
+          >
+            <ThreeBreathingSphere class="w-full" :palette-index="spherePaletteIndex" />
             <svg class="pointer-events-none absolute inset-0 h-full w-full text-emerald-300/70" viewBox="0 0 120 120">
               <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(15, 118, 110, 0.12)" stroke-width="4" />
               <circle
@@ -261,7 +277,7 @@ watch(shareMessage, () => {
         </div>
       </div>
 
-      <div v-else class="space-y-6 rounded-3xl border border-emerald-100 bg-white/95 p-8 text-center shadow-xl shadow-emerald-200/60 backdrop-blur-sm">
+      <div v-else class="glass-panel animate-fade-scale space-y-6 p-8 text-center">
         <div class="space-y-2">
           <h2 class="text-2xl font-semibold text-emerald-600">完成一次專注！</h2>
           <p class="text-sm text-slate-500">

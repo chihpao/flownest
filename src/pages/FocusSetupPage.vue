@@ -96,8 +96,8 @@ async function handleStart() {
 <template>
   <main class="relative min-h-screen w-full bg-gradient-to-b from-white via-emerald-50/40 to-slate-50 px-4 pb-28 pt-[env(safe-area-inset-top)] sm:px-6 sm:pb-[env(safe-area-inset-bottom)]">
     <section class="mx-auto flex w-full max-w-6xl flex-col gap-10">
-      <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <article class="space-y-6 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-sm">
+      <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] animate-fade-up">
+        <article class="glass-panel animate-fade-scale space-y-6 p-6">
           <div class="space-y-3">
             <label class="block text-sm font-semibold text-slate-700">專注主題</label>
             <input
@@ -157,7 +157,7 @@ async function handleStart() {
         </article>
 
         <aside class="space-y-6">
-          <article class="space-y-4 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-sm">
+          <article class="glass-panel animate-fade-scale space-y-4 p-6">
             <header class="space-y-1">
               <h2 class="text-lg font-semibold text-slate-800">環境音景配方</h2>
             </header>
@@ -181,7 +181,7 @@ async function handleStart() {
             </ul>
           </article>
 
-          <article class="space-y-4 rounded-3xl border border-emerald-200 bg-emerald-50/90 p-6 shadow-lg shadow-emerald-100">
+          <article class="glass-panel-soft animate-fade-up space-y-4 p-6">
             <header class="space-y-1">
               <h2 class="text-lg font-semibold text-emerald-700">專注摘要</h2>
             </header>
