@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView, type RouteLocationNormalizedLoaded } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import SessionSyncBanner from '@/components/SessionSyncBanner.vue'
 import BgmControl from '@/components/BgmControl.vue'
+
+function navOffsetClass(route?: RouteLocationNormalizedLoaded) {
+  return route?.meta?.navSpacing === false ? '' : 'pt-[calc(env(safe-area-inset-top)+4.5rem)]'
+}
 </script>
 
 <template>
@@ -11,13 +15,15 @@ import BgmControl from '@/components/BgmControl.vue'
     <NavBar />
     <SessionSyncBanner />
     <div class="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
-      <RouterView v-slot="{ Component }">
+      <RouterView v-slot="{ Component, route }">
         <Transition name="page-fade" mode="out-in">
           <Suspense>
-            <component :is="Component" />
+            <div :class="['h-full', navOffsetClass(route)]">
+              <component :is="Component" />
+            </div>
             <template #fallback>
-              <div class="grid min-h-full place-content-center bg-white/80 text-slate-400">
-                載入中...
+              <div :class="['grid min-h-full place-content-center bg-white/80 text-slate-400', navOffsetClass(route)]">
+                Loading...
               </div>
             </template>
           </Suspense>

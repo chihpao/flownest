@@ -64,7 +64,7 @@ function goToTimer() {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 px-4 pb-20 pt-[env(safe-area-inset-top)]">
+  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 px-4 pb-20">
     <section class="mx-auto w-full max-w-6xl space-y-10">
       <header class="space-y-3 text-center">
         <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.3em] text-emerald-600">個人儀表板</span>
@@ -122,3 +122,4 @@ function goToTimer() {
     </section>
   </main>
 </template>
+

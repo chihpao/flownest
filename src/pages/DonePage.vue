@@ -74,15 +74,10 @@ function setView(mode: ViewMode) {
 </script>
 
 <template>
-  <main class="relative min-h-screen px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] pt-[calc(env(safe-area-inset-top)+5rem)] sm:px-6 lg:px-8">
+  <main class="relative min-h-screen px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] sm:px-6 lg:px-8">
     <div class="pointer-events-none absolute inset-x-0 top-12 -z-10 h-64 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_65%)]"></div>
 
     <section class="mx-auto flex w-full max-w-6xl flex-col gap-10">
-      <header class="space-y-3 text-center animate-fade-up">
-        <p class="text-xs font-semibold uppercase tracking-[0.45em] text-emerald-500">Focus Records</p>
-        <h1 class="text-3xl font-bold text-slate-900 sm:text-4xl">成效紀錄</h1>
-        <p class="text-sm text-slate-500">檢視你累積的專注足跡，保持節奏與成長。</p>
-      </header>
 
       <div class="glass-panel animate-fade-scale space-y-8 p-6 sm:p-8">
         <div v-if="!hasSessions" class="space-y-3 text-center text-sm text-emerald-700">
@@ -165,3 +160,7 @@ function setView(mode: ViewMode) {
     </section>
   </main>
 </template>
+
+
+
+

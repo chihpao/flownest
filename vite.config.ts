@@ -16,10 +16,12 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: true,
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         manualChunks: {
-          vanta: ['vanta']
+          vanta: ['vanta'],
+          three: ['three']
         }
       }
     }

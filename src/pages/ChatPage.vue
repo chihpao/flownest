@@ -351,7 +351,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 pb-24 pt-[env(safe-area-inset-top)]">
+  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 pb-24">
     <section class="mx-auto w-full max-w-6xl space-y-10 px-4 sm:px-6 lg:px-8">
       <header class="flex flex-col gap-4 text-left md:flex-row md:items-end md:justify-between">
         <router-link
@@ -555,3 +555,4 @@ onBeforeUnmount(() => {
     </section>
   </main>
 </template>
+

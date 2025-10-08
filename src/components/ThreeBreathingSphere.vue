@@ -1,9 +1,17 @@
 <!-- cspell:ignore highp mediump metalness clearcoat hemi -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
-import * as THREE from 'three'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import LoadingOverlay from '@/components/LoadingOverlay.vue'
+import { loadThree } from '@/utils/loadThree'
+import type * as THREEType from 'three'
+
+type ThreeModule = typeof THREEType
+
+let THREE!: ThreeModule
 
 const container = ref<HTMLDivElement | null>(null)
+const isLoading = ref(true)
+const loadError = ref<string | null>(null)
 
 const props = defineProps<{ paletteIndex?: number }>()
 let desiredFilterIndex = typeof props.paletteIndex === 'number' ? props.paletteIndex : 0
@@ -17,16 +25,16 @@ watch(() => props.paletteIndex, (value) => {
 })
 
 // three.js 物件
-let renderer: THREE.WebGLRenderer | null = null
-let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
-let mainSphere: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhysicalMaterial> | null = null
-let breathingLight: THREE.PointLight | null = null
-let zenLight: THREE.PointLight | null = null
+let renderer: THREEType.WebGLRenderer | null = null
+let scene: THREEType.Scene | null = null
+let camera: THREEType.PerspectiveCamera | null = null
+let mainSphere: THREEType.Mesh<THREEType.SphereGeometry, THREEType.MeshPhysicalMaterial> | null = null
+let breathingLight: THREEType.PointLight | null = null
+let zenLight: THREEType.PointLight | null = null
 
 // 粒子 / 星塵
-let floatingParticles: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> | null = null
-let cosmicDust: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null = null
+let floatingParticles: THREEType.Points<THREEType.BufferGeometry, THREEType.ShaderMaterial> | null = null
+let cosmicDust: THREEType.Points<THREEType.BufferGeometry, THREEType.PointsMaterial> | null = null
 
 // 動畫控制
 let raf = 0
@@ -34,6 +42,19 @@ let startTime = 0
 
 // 滑鼠互動（容器座標轉 -1~1）
 const mousePos = { x: 0, y: 0 }
+
+let resizeObserver: ResizeObserver | null = null
+
+function updateRendererSize() {
+  if (!renderer || !camera || !container.value) return
+  const width = container.value.clientWidth
+  if (!width) return
+  const dpr = Math.min(window.devicePixelRatio, 2)
+  renderer.setPixelRatio(dpr)
+  renderer.setSize(width, width, false)
+  camera.aspect = 1
+  camera.updateProjectionMatrix()
+}
 
 const FILTER_PRESETS = [
   'none',
@@ -55,16 +76,6 @@ function applyFilter(value: number) {
   }
 }
 
-const getCanvasSize = () => {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const base = Math.min(vw, vh)
-  if (vw <= 480) return Math.min(vw - 24, vh * 0.45, 320)
-  if (vw <= 768) return Math.min(base * 0.55, 420)
-  if (vw <= 1200) return Math.min(base * 0.45, 480)
-  return Math.min(base * 0.4, 550)
-}
-
 function handleMouseMove (event: MouseEvent) {
   const el = container.value
   if (!el) return
@@ -73,17 +84,8 @@ function handleMouseMove (event: MouseEvent) {
   mousePos.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
 }
 
-function handleResize () {
-  const el = container.value
-  if (!renderer || !camera || !el) return
-  const size = getCanvasSize()
-  renderer.setSize(size, size)
-  camera.aspect = 1
-  camera.updateProjectionMatrix()
-}
-
 /** 產生圓形 Alpha 紋理（給 PointsMaterial 當 alphaMap） */
-function makeCircleAlphaTexture(size = 64): THREE.Texture {
+function makeCircleAlphaTexture(size = 64): THREEType.Texture {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = size
   const ctx = canvas.getContext('2d')!
@@ -109,7 +111,7 @@ function makeCircleAlphaTexture(size = 64): THREE.Texture {
 }
 
 /** 漂浮粒子（發光綠色；用自訂 Shader 畫圓點） */
-function createFloatingParticles(sceneRef: THREE.Scene) {
+function createFloatingParticles(sceneRef: THREEType.Scene) {
   const COUNT = 1200 // 中等密度
   const positions = new Float32Array(COUNT * 3)
   const colors = new Float32Array(COUNT * 3)
@@ -217,7 +219,7 @@ function createFloatingParticles(sceneRef: THREE.Scene) {
 }
 
 /** 星塵（淡綠、用 PointsMaterial + 圓形 alphaMap，避免方塊） */
-function createCosmicDust(sceneRef: THREE.Scene) {
+function createCosmicDust(sceneRef: THREEType.Scene) {
   const COUNT = 800
   const positions = new Float32Array(COUNT * 3)
   const colors = new Float32Array(COUNT * 3)
@@ -258,173 +260,181 @@ function createCosmicDust(sceneRef: THREE.Scene) {
   sceneRef.add(cosmicDust)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick()
+
   const el = container.value
-  if (!el) return
-
-  // Renderer
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    premultipliedAlpha: false,
-    powerPreference: 'high-performance',
-    precision: 'highp'
-  })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  const size = getCanvasSize()
-  renderer.setSize(size, size)
-  renderer.setClearColor(0x000000, 0)
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.2
-  renderer.outputColorSpace = THREE.SRGBColorSpace
-
-  // 讓 three.js 的 <canvas> 也跟著圓角 + 填滿容器（修掉方形外露）
-  renderer.domElement.className = 'w-full h-full rounded-full block'
-
-  el.appendChild(renderer.domElement)
-  rendererReady = true
-  applyFilter(desiredFilterIndex)
-
-  // Scene & Camera
-  scene = new THREE.Scene()
-  camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
-  camera.position.set(0, 0, 9)
-
-  // 主球（會呼吸）
-  const sphereGeo = new THREE.SphereGeometry(2.4, 64, 64)
-  const sphereMat = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(0x6ea8ff),
-    roughness: 0.2,
-    metalness: 0.4,
-    clearcoat: 1.0,
-    transmission: 0,
-    emissive: new THREE.Color(0x0f2238),
-    emissiveIntensity: 0.25
-  })
-  mainSphere = new THREE.Mesh(sphereGeo, sphereMat)
-  mainSphere.castShadow = false
-  mainSphere.receiveShadow = false
-  scene.add(mainSphere)
-
-  // 燈光（偏綠）
-  const ambient = new THREE.AmbientLight(0x1a2a1a, 0.4)
-  scene.add(ambient)
-
-  const hemi = new THREE.HemisphereLight(0x44ff88, 0x224422, 0.45)
-  scene.add(hemi)
-
-  const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.7)
-  keyLight.position.set(6, 8, 6)
-  keyLight.castShadow = true
-  keyLight.shadow.mapSize.setScalar(1024)
-  keyLight.shadow.camera.near = 0.1
-  keyLight.shadow.camera.far = 25
-  scene.add(keyLight)
-
-  const backLight = new THREE.DirectionalLight(0x44ffaa, 0.6)
-  backLight.position.set(-5, -3, -8)
-  scene.add(backLight)
-
-  breathingLight = new THREE.PointLight(0x66ff99, 1.0, 25, 2)
-  scene.add(breathingLight)
-
-  zenLight = new THREE.PointLight(0x66ffdd, 0.8, 20, 1.8)
-  scene.add(zenLight)
-
-  // 粒子與星塵
-  createFloatingParticles(scene)
-  createCosmicDust(scene)
-
-  // 事件
-  el.addEventListener('mousemove', handleMouseMove)
-  window.addEventListener('resize', handleResize)
-
-  // 動畫
-  startTime = performance.now()
-
-  const loop = () => {
-    if (!renderer || !scene || !camera || !mainSphere || !breathingLight || !zenLight) return
-    const t = (performance.now() - startTime) / 1000
-
-    // 8 秒呼吸循環
-    const breathCycle = 8.0
-    const phase = (t % breathCycle) / breathCycle
-    let breathIntensity = 0.0
-    if (phase < 0.4) {
-      const p = phase / 0.4
-      breathIntensity = 0.5 * (1.0 - Math.cos(Math.PI * p))
-    } else if (phase < 0.5) {
-      breathIntensity = 1.0
-    } else if (phase < 0.9) {
-      const p = (phase - 0.5) / 0.4
-      breathIntensity = 1.0 - 0.5 * (1.0 - Math.cos(Math.PI * p))
-    } else {
-      breathIntensity = 0.0
-    }
-
-    // 主球
-    const currentScale = 1 + 0.12 * breathIntensity
-    mainSphere.scale.setScalar(currentScale)
-    mainSphere.rotation.y += 0.001
-    mainSphere.rotation.x = Math.sin(t * 0.2) * 0.05
-    mainSphere.position.y = Math.sin(t * 0.15) * 0.08
-
-    const hue = 0.33 + Math.sin(t * 0.06) * 0.05
-    mainSphere.material.color.setHSL(hue, 0.7, 0.55)
-
-    // 粒子 uniforms + 旋轉
-    if (floatingParticles) {
-      const mat = floatingParticles.material
-      if (mat.uniforms?.time) {
-        mat.uniforms.time.value = t
-        mat.uniforms.breathPhase.value = breathIntensity
-        mat.uniforms.mouseInfluence.value.set(mousePos.x * 0.5, mousePos.y * 0.5)
-      }
-      floatingParticles.rotation.y += 0.00035
-      floatingParticles.rotation.x = Math.sin(t * 0.1) * 0.02
-    }
-
-    // 星塵
-    if (cosmicDust) {
-      cosmicDust.rotation.y += 0.00015
-      cosmicDust.rotation.x += 0.00010
-      ;(cosmicDust.material as THREE.PointsMaterial).opacity = 0.22 + breathIntensity * 0.10
-    }
-
-    // 燈光（綠色系）
-    const lightRadius = 5 + Math.sin(t * 0.3)
-    breathingLight.position.set(
-      Math.cos(t * 0.4) * lightRadius,
-      Math.sin(t * 0.6) * 3,
-      4 + Math.sin(t * 0.2) * 2
-    )
-    breathingLight.intensity = 0.75 + breathIntensity * 0.65
-    breathingLight.color.setHSL(0.35 + Math.sin(t * 0.5) * 0.04, 0.9, 0.6)
-
-    zenLight.position.set(
-      -Math.cos(t * 0.35) * 6,
-      Math.cos(t * 0.25) * 2,
-      -3 + Math.cos(t * 0.4) * 1.5
-    )
-    zenLight.intensity = 0.55 + breathIntensity * 0.45
-    zenLight.color.setHSL(0.42 + Math.cos(t * 0.3) * 0.06, 0.8, 0.7)
-
-    // 相機微搖 + 滑鼠跟隨
-    camera.position.x = Math.sin(t * 0.08) * 0.15 + mousePos.x * 0.1
-    camera.position.y = Math.cos(t * 0.06) * 0.12 + mousePos.y * 0.08
-    camera.position.z = 9 + Math.sin(t * 0.05) * 0.1
-    camera.lookAt(0, 0, 0)
-
-    renderer.render(scene, camera)
-    raf = requestAnimationFrame(loop)
+  if (!el) {
+    loadError.value = '找不到渲染容器'
+    isLoading.value = false
+    return
   }
 
-  handleResize()
-  raf = requestAnimationFrame(loop)
-})
+  isLoading.value = true
+  loadError.value = null
 
+  try {
+    THREE = await loadThree()
+
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      premultipliedAlpha: false,
+      powerPreference: 'high-performance',
+      precision: 'highp'
+    })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setSize(1, 1, false)
+    renderer.setClearColor(0x000000, 0)
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.2
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+
+    renderer.domElement.className = 'w-full h-full rounded-full block'
+
+    el.appendChild(renderer.domElement)
+    rendererReady = true
+    applyFilter(desiredFilterIndex)
+
+    scene = new THREE.Scene()
+    camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
+    camera.position.set(0, 0, 9)
+
+    const sphereGeo = new THREE.SphereGeometry(2.4, 64, 64)
+    const sphereMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(0x6ea8ff),
+      roughness: 0.2,
+      metalness: 0.4,
+      clearcoat: 1.0,
+      transmission: 0,
+      emissive: new THREE.Color(0x0f2238),
+      emissiveIntensity: 0.25
+    })
+    mainSphere = new THREE.Mesh(sphereGeo, sphereMat)
+    mainSphere.castShadow = false
+    mainSphere.receiveShadow = false
+    scene.add(mainSphere)
+
+    const ambient = new THREE.AmbientLight(0x1a2a1a, 0.4)
+    scene.add(ambient)
+
+    const hemi = new THREE.HemisphereLight(0x44ff88, 0x224422, 0.45)
+    scene.add(hemi)
+
+    const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.7)
+    keyLight.position.set(6, 8, 6)
+    keyLight.castShadow = true
+    keyLight.shadow.mapSize.setScalar(1024)
+    keyLight.shadow.camera.near = 0.1
+    keyLight.shadow.camera.far = 25
+    scene.add(keyLight)
+
+    const backLight = new THREE.DirectionalLight(0x44ffaa, 0.6)
+    backLight.position.set(-5, -3, -8)
+    scene.add(backLight)
+
+    breathingLight = new THREE.PointLight(0x66ff99, 1.0, 25, 2)
+    scene.add(breathingLight)
+
+    zenLight = new THREE.PointLight(0x66ffdd, 0.8, 20, 1.8)
+    scene.add(zenLight)
+
+    createFloatingParticles(scene)
+    createCosmicDust(scene)
+
+    el.addEventListener('mousemove', handleMouseMove)
+
+    if (!resizeObserver) {
+      resizeObserver = new ResizeObserver(() => updateRendererSize())
+      resizeObserver.observe(el)
+    }
+    window.addEventListener('resize', updateRendererSize)
+
+    startTime = performance.now()
+
+    const loop = () => {
+      if (!renderer || !scene || !camera || !mainSphere || !breathingLight || !zenLight) return
+      const t = (performance.now() - startTime) / 1000
+
+      const breathCycle = 8.0
+      const phase = (t % breathCycle) / breathCycle
+      let breathIntensity = 0.0
+      if (phase < 0.4) {
+        const p = phase / 0.4
+        breathIntensity = 0.5 * (1.0 - Math.cos(Math.PI * p))
+      } else if (phase < 0.5) {
+        breathIntensity = 1.0
+      } else if (phase < 0.9) {
+        const p = (phase - 0.5) / 0.4
+        breathIntensity = 1.0 - 0.5 * (1.0 - Math.cos(Math.PI * p))
+      } else {
+        breathIntensity = 0.0
+      }
+
+      const currentScale = 1 + 0.12 * breathIntensity
+      mainSphere.scale.setScalar(currentScale)
+      mainSphere.rotation.y += 0.001
+      mainSphere.rotation.x = Math.sin(t * 0.2) * 0.05
+      mainSphere.position.y = Math.sin(t * 0.15) * 0.08
+
+      const hue = 0.33 + Math.sin(t * 0.06) * 0.05
+      mainSphere.material.color.setHSL(hue, 0.7, 0.55)
+
+      if (floatingParticles) {
+        const mat = floatingParticles.material
+        if (mat.uniforms?.time) {
+          mat.uniforms.time.value = t
+          mat.uniforms.breathPhase.value = breathIntensity
+          mat.uniforms.mouseInfluence.value.set(mousePos.x * 0.5, mousePos.y * 0.5)
+        }
+        floatingParticles.rotation.y += 0.00035
+        floatingParticles.rotation.x = Math.sin(t * 0.1) * 0.02
+      }
+
+      if (cosmicDust) {
+        cosmicDust.rotation.y += 0.00015
+        cosmicDust.rotation.x += 0.00010
+        ;(cosmicDust.material as THREEType.PointsMaterial).opacity = 0.22 + breathIntensity * 0.10
+      }
+
+      const lightRadius = 5 + Math.sin(t * 0.3)
+      breathingLight.position.set(
+        Math.cos(t * 0.4) * lightRadius,
+        Math.sin(t * 0.6) * 3,
+        4 + Math.sin(t * 0.2) * 2
+      )
+      breathingLight.intensity = 0.75 + breathIntensity * 0.65
+      breathingLight.color.setHSL(0.35 + Math.sin(t * 0.5) * 0.04, 0.9, 0.6)
+
+      zenLight.position.set(
+        -Math.cos(t * 0.35) * 6,
+        Math.cos(t * 0.25) * 2,
+        -3 + Math.cos(t * 0.4) * 1.5
+      )
+      zenLight.intensity = 0.55 + breathIntensity * 0.45
+      zenLight.color.setHSL(0.42 + Math.cos(t * 0.3) * 0.06, 0.8, 0.7)
+
+      camera.position.x = Math.sin(t * 0.08) * 0.15 + mousePos.x * 0.1
+      camera.position.y = Math.cos(t * 0.06) * 0.12 + mousePos.y * 0.08
+      camera.position.z = 9 + Math.sin(t * 0.05) * 0.1
+      camera.lookAt(0, 0, 0)
+
+      renderer.render(scene, camera)
+      raf = requestAnimationFrame(loop)
+    }
+
+    updateRendererSize()
+    raf = requestAnimationFrame(loop)
+  } catch (err) {
+    console.error('初始化呼吸球時發生錯誤：', err)
+    loadError.value = err instanceof Error ? err.message : String(err)
+    rendererReady = false
+  } finally {
+    isLoading.value = false
+  }
+})
 onUnmounted(() => {
   if (raf) cancelAnimationFrame(raf)
 
@@ -435,7 +445,12 @@ onUnmounted(() => {
 
   const el = container.value
   if (el) el.removeEventListener('mousemove', handleMouseMove)
-  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('resize', updateRendererSize)
+
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 
   if (renderer) {
     renderer.dispose()
@@ -466,14 +481,33 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- 外層容器（純 Tailwind 原子類） -->
-  <div class="relative mx-auto aspect-square max-w-[550px] rounded-full overflow-hidden 
-            bg-[radial-gradient(circle_at_center,#f0faff_0%,#ffffff_100%)] 
-            dark:bg-[radial-gradient(circle_at_center,#050510_0%,#000008_100%)]">
-  <div ref="container" class="relative w-full h-full rounded-full overflow-hidden z-10
-               shadow-[inset_0_0_120px_rgba(102,170,255,0.25),0_0_80px_rgba(102,170,255,0.3),0_0_160px_rgba(170,119,255,0.2),0_0_240px_rgba(255,136,221,0.15)]">
+  <!-- �~�h�e���]�� Tailwind ��l���^ -->
+  <div
+    class="relative mx-auto aspect-square max-w-[550px] overflow-hidden rounded-full
+           bg-[radial-gradient(circle_at_center,#f0faff_0%,#ffffff_100%)] 
+           dark:bg-[radial-gradient(circle_at_center,#050510_0%,#000008_100%)]"
+  >
+    <div
+      ref="container"
+      class="focus-sphere-container relative z-10 h-full w-full overflow-hidden rounded-full
+             shadow-[inset_0_0_120px_rgba(102,170,255,0.25),0_0_80px_rgba(102,170,255,0.3),0_0_160px_rgba(170,119,255,0.2),0_0_240px_rgba(255,136,221,0.15)]"
+    >
+      <LoadingOverlay v-if="isLoading" label="喚醒專注能量" />
+      <div
+        v-else-if="loadError"
+        class="absolute inset-0 grid place-content-center bg-white/80 text-center text-sm text-emerald-600"
+      >
+        {{ loadError }}
+      </div>
+    </div>
   </div>
-</div>
-
-
 </template>
+
+
+
+
+
+
+
+
+

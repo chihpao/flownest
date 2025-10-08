@@ -9,8 +9,8 @@ import BackgroundWaves from '@/components/BackgroundWaves.vue'
       <BackgroundWaves />
     </div>
 
-    <main class="relative z-10 flex min-h-screen flex-col items-center px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      <section class="w-full max-w-5xl py-16 md:py-20">
+    <main class="relative z-10 flex min-h-screen flex-col items-center px-6 pb-[env(safe-area-inset-bottom)]">
+      <section class="w-full max-w-5xl pb-16 md:pb-20">
         <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
           <div class="space-y-8">
             <div class="space-y-4">
@@ -44,3 +44,4 @@ import BackgroundWaves from '@/components/BackgroundWaves.vue'
     </main>
   </div>
 </template>
+

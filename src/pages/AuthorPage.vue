@@ -291,7 +291,7 @@ watch(() => auth.user?.uid, async () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-emerald-50 pb-24 pt-[env(safe-area-inset-top)]">
+  <main class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-emerald-50 pb-24">
     <section class="mx-auto w-full max-w-5xl space-y-8 px-4 sm:px-6 lg:px-8">
       <div class="flex flex-col gap-4 rounded-3xl border border-emerald-100 bg-white/95 p-6 shadow-xl shadow-emerald-100/60 md:flex-row md:items-center md:justify-between">
         <div class="flex items-center gap-4">
@@ -379,3 +379,4 @@ watch(() => auth.user?.uid, async () => {
     </section>
   </main>
 </template>
+

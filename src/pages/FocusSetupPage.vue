@@ -94,7 +94,7 @@ async function handleStart() {
 </script>
 
 <template>
-  <main class="relative min-h-screen w-full bg-gradient-to-b from-white via-emerald-50/40 to-slate-50 px-4 pb-28 pt-[env(safe-area-inset-top)] sm:px-6 sm:pb-[env(safe-area-inset-bottom)]">
+  <main class="relative min-h-screen w-full bg-gradient-to-b from-white via-emerald-50/40 to-slate-50 px-4 pb-28 sm:px-6 sm:pb-[env(safe-area-inset-bottom)]">
     <section class="mx-auto flex w-full max-w-6xl flex-col gap-10">
       <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] animate-fade-up">
         <article class="glass-panel animate-fade-scale space-y-6 p-6">
@@ -206,3 +206,4 @@ async function handleStart() {
     </section>
   </main>
 </template>
+

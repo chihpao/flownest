@@ -302,7 +302,7 @@ watch(() => auth.user?.uid, async () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 pb-24 pt-[env(safe-area-inset-top)]">
+  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-slate-50 pb-24">
     <section class="mx-auto w-full max-w-6xl space-y-10 px-4 sm:px-6 lg:px-8">
 
       <div class="grid gap-8 lg:grid-cols-[minmax(0,1.65fr)_minmax(260px,1fr)] lg:items-start">
@@ -420,3 +420,4 @@ watch(() => auth.user?.uid, async () => {
     </section>
   </main>
 </template>
+

@@ -1,36 +1,51 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, nextTick } from 'vue';
-import * as THREE from 'three';
-import WAVES from 'vanta/dist/vanta.waves.min';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import LoadingOverlay from '@/components/LoadingOverlay.vue'
+import { ensureThreeOnWindow } from '@/utils/loadThree'
 
-// 擴展 Window 介面以包含 THREE
-declare global {
-  interface Window {
-    THREE: typeof THREE;
+const bgEl = ref<HTMLElement | null>(null)
+const isReady = ref(false)
+const isLoading = ref(true)
+const error = ref<string | null>(null)
+
+let vanta: any = null
+let initTimer: number | null = null
+
+function destroyVanta() {
+  if (vanta) {
+    if (typeof vanta.destroy === 'function') {
+      vanta.destroy()
+    }
+    vanta = null
   }
+  isReady.value = false
 }
 
-const bgEl = ref<HTMLElement | null>(null);
-let vanta: any = null;
+async function initVanta() {
+  if (!bgEl.value || typeof window === 'undefined') return
 
-const initVanta = () => {
-  if (!bgEl.value) return;
-  
-  // 確保 Three.js 已載入到 window 物件
-  if (typeof window !== 'undefined') {
-    window.THREE = window.THREE || THREE;
+  if (vanta) {
+    destroyVanta()
   }
 
-  // 移除任何現有的 canvas 元素
-  const existingCanvas = bgEl.value.querySelector('canvas');
-  if (existingCanvas && existingCanvas.parentNode) {
-    existingCanvas.parentNode.removeChild(existingCanvas);
-  }
+  isLoading.value = true
+  error.value = null
 
   try {
+    const [three, vantaModule] = await Promise.all([
+      ensureThreeOnWindow(),
+      import('vanta/dist/vanta.waves.min.js')
+    ])
+
+    const WAVES = (vantaModule as any)?.default ?? vantaModule
+    if (typeof WAVES !== 'function') {
+      throw new Error('無法載入 Vanta WAVES 模組')
+    }
+    const target = bgEl.value
+
     vanta = WAVES({
-      el: bgEl.value,
-      THREE: window.THREE || THREE,
+      el: target,
+      THREE: three,
       mouseControls: true,
       touchControls: true,
       gyroControls: false,
@@ -40,65 +55,91 @@ const initVanta = () => {
       scaleMobile: 1.0,
       color: 0x3b82f6,
       shininess: 50,
-      waveHeight: 15.0,
-      waveSpeed: 0.8,
+      waveHeight: 18.0,
+      waveSpeed: 0.85,
       zoom: 0.7,
       forceAnimate: true,
-      backgroundColor: 0xffffff00,
-    });
+      backgroundColor: 0xffffff00
+    })
 
-    // 強制重繪
-    setTimeout(() => {
-      if (vanta && vanta.renderer) {
-        vanta.renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-    }, 100);
-  } catch (error) {
-    console.error('Error initializing Vanta.js:', error);
+    if (typeof vanta?.resize === 'function') {
+      vanta.resize()
+    }
+
+    window.requestAnimationFrame(() => {
+      isReady.value = true
+    })
+  } catch (err) {
+    console.error('初始化背景波浪時發生錯誤：', err)
+    error.value = err instanceof Error ? err.message : String(err)
+    destroyVanta()
+  } finally {
+    isLoading.value = false
   }
-};
+}
 
-onMounted(() => {
-  if (typeof window === 'undefined') return;
-  
-  nextTick(() => {
-    // 延遲初始化以確保 DOM 完全載入
-    const timer = setTimeout(() => {
-      initVanta();
-      // 監聽窗口大小變化
-      window.addEventListener('resize', initVanta);
-    }, 100);
+function handleResize() {
+  if (vanta && typeof vanta.resize === 'function') {
+    vanta.resize()
+  }
+}
 
-    // 清理計時器
-    return () => clearTimeout(timer);
-  });
-});
+onMounted(async () => {
+  if (typeof window === 'undefined') return
+
+  await nextTick()
+  initTimer = window.setTimeout(() => {
+    void initVanta()
+  }, 10)
+  window.addEventListener('resize', handleResize)
+})
 
 onUnmounted(() => {
-  if (vanta) {
-    vanta.destroy();
-    vanta = null;
+  if (initTimer !== null) {
+    window.clearTimeout(initTimer)
+    initTimer = null
   }
-  window.removeEventListener('resize', initVanta);
-});
+  window.removeEventListener('resize', handleResize)
+  destroyVanta()
+  isLoading.value = false
+})
 </script>
 
 <template>
-  <div ref="bgEl" class="fixed inset-0 w-full h-full"></div>
+  <div class="background-wrapper">
+    <div ref="bgEl" class="background-waves" :class="{ 'is-ready': isReady }" />
+    <LoadingOverlay v-if="isLoading" label="喚醒波浪背景" />
+    <div v-if="error" class="error-chip">
+      {{ error }}
+    </div>
+  </div>
 </template>
 
 <style scoped>
-div {
+.background-wrapper {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
   z-index: -1;
+  pointer-events: none;
 }
 
-:deep(canvas) {
+.background-waves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.background-waves.is-ready {
+  opacity: 1;
+}
+
+.background-waves :deep(canvas) {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
@@ -106,5 +147,18 @@ div {
   height: 100% !important;
   display: block !important;
   z-index: -1 !important;
+}
+
+.error-chip {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: rgba(248, 113, 113, 0.85);
+  color: white;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 12px 30px rgba(248, 113, 113, 0.25);
 }
 </style>

@@ -212,7 +212,7 @@ watch(shareMessage, () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-sky-50 to-white px-4 pb-24 pt-[env(safe-area-inset-top)] text-slate-900 sm:px-6">
+  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-sky-50 to-white px-4 pb-24 text-slate-900 sm:px-6">
     <section class="mx-auto flex w-full max-w-4xl flex-col gap-10">
       <header class="space-y-2 text-center animate-fade-up">
         <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.2em] text-emerald-600">專注倒數</span>
@@ -349,4 +349,5 @@ watch(shareMessage, () => {
     </section>
   </main>
 </template>
+
 

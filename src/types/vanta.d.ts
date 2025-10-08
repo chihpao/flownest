@@ -29,3 +29,7 @@ declare module 'vanta/dist/vanta.waves.min' {
   const WAVES: (options: VantaWavesSettings) => VantaWavesEffect
   export default WAVES
 }
+
+declare module 'vanta/dist/vanta.waves.min.js' {
+  export { default } from 'vanta/dist/vanta.waves.min'
+}
