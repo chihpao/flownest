@@ -73,6 +73,11 @@ async function goRecords() {
   await router.push({ name: 'done' }).catch(() => {})
 }
 
+async function goAccount() {
+  closeMenu()
+  await router.push({ name: 'account-settings' }).catch(() => {})
+}
+
 async function goChat() {
   closeMenu()
   await router.push({ name: 'chat' }).catch(() => {})
@@ -161,7 +166,15 @@ async function logout() {
               </button>
               <button
                 type="button"
-                class="mt-1 flex w全 items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
+                class="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
+                @click="goAccount"
+              >
+                帳戶設置
+                <span class="text-xs text-emerald-500">Account</span>
+              </button>
+              <button
+                type="button"
+                class="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
                 @click="goChat"
               >
                 <span class="flex w-full items-center justify-between">

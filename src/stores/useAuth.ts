@@ -9,9 +9,11 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  updateProfile,
   type User
 } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { sendPasswordResetEmail, reload } from 'firebase/auth'
 
 async function upsertUserDoc(user: User) {
   await setDoc(
@@ -76,10 +78,23 @@ export const useAuth = defineStore('auth', {
       }
     },
 
-    async registerWithEmail(email: string, password: string) {
+    async registerWithEmail(email: string, password: string, displayName?: string) {
       this.error = ''
-      const { user } = await createUserWithEmailAndPassword(auth, email, password)
-      await upsertUserDoc(user)
+      try {
+        const { user } = await createUserWithEmailAndPassword(auth, email, password)
+        const trimmed = displayName?.trim()
+        if (trimmed) {
+          try {
+            await updateProfile(user, { displayName: trimmed })
+          } catch {
+            // ignore display name update failure, still proceed
+          }
+        }
+        await upsertUserDoc(user)
+      } catch (e: any) {
+        this.error = e?.message ?? String(e)
+        throw e
+      }
     },
 
     async loginWithEmail(email: string, password: string) {
@@ -90,6 +105,79 @@ export const useAuth = defineStore('auth', {
     async logout() {
       this.error = ''
       await signOut(auth)
+    },
+
+    async updateAvatar(photoURL: string) {
+      if (!this.user) {
+        throw new Error('User is not authenticated')
+      }
+
+      this.error = ''
+      try {
+        await updateProfile(this.user, { photoURL })
+        await setDoc(
+          doc(db, 'users', this.user.uid),
+          {
+            photoURL,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        )
+        await this.refreshUser()
+      } catch (e: any) {
+        this.error = e?.message ?? 'Failed to update avatar.'
+        throw e
+      }
+    },
+
+    async updateDisplayName(name: string) {
+      if (!this.user) {
+        throw new Error('User is not authenticated')
+      }
+
+      const trimmed = name.trim()
+      if (!trimmed) {
+        throw new Error('顯示名稱不能是空白')
+      }
+
+      this.error = ''
+      try {
+        await updateProfile(this.user, { displayName: trimmed })
+        await setDoc(
+          doc(db, 'users', this.user.uid),
+          {
+            displayName: trimmed,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        )
+        await this.refreshUser()
+      } catch (e: any) {
+        this.error = e?.message ?? 'Failed to update display name.'
+        throw e
+      }
+    },
+
+    async sendPasswordReset() {
+      if (!this.user?.email) {
+        throw new Error('尚未偵測到電子郵件地址')
+      }
+      this.error = ''
+      try {
+        await sendPasswordResetEmail(auth, this.user.email)
+      } catch (e: any) {
+        this.error = e?.message ?? '寄送失敗，請稍後再試。'
+        throw e
+      }
+    },
+
+    async refreshUser() {
+      if (!auth.currentUser) return
+      await reload(auth.currentUser)
+      this.user = auth.currentUser
     }
   }
 })
+
+
+
