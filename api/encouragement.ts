@@ -25,9 +25,34 @@ function getClient(): InferenceClient {
   return cachedClient
 }
 
+interface SessionIntentSnapshot {
+  id?: string
+  name?: string
+  description?: string
+  affirmation?: string
+}
+
+interface SessionAmbientSnapshot {
+  id?: string
+  label?: string
+  description?: string
+}
+
+interface SessionSummary {
+  title: string
+  minutesPlanned: number
+  minutesActual: number
+  startedAt?: number
+  finishedAt?: number
+  finishedEarly?: boolean
+  intent?: SessionIntentSnapshot | null
+  ambient?: SessionAmbientSnapshot | null
+}
+
 interface NormalizedBody {
   prompt: string
   locale: string
+  session?: SessionSummary | null
 }
 
 function normalizeLocale(raw?: string | null): string {
@@ -40,7 +65,88 @@ function normalizeLocale(raw?: string | null): string {
   return DEFAULT_LOCALE
 }
 
+function clampPrompt(value: string): string {
+  if (!value) return ''
+  if (value.length <= MAX_PROMPT_LENGTH) return value
+  return value.slice(0, MAX_PROMPT_LENGTH)
+}
+
 type VercelRequestWithRawBody = VercelRequest & { rawBody?: Buffer }
+
+function sanitizeText(value: unknown, fallback = ''): string {
+  if (typeof value !== 'string') return fallback
+  return value.replace(/\s+/g, ' ').trim() || fallback
+}
+
+function toPositiveMinutes(value: unknown): number | null {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  return Math.max(1, Math.round(numeric))
+}
+
+function toTimestamp(value: unknown): number | undefined {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined
+  return Math.round(numeric)
+}
+
+function parseIntentSnapshot(raw: any): SessionIntentSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null
+  const name = sanitizeText(raw.name ?? raw.title ?? '')
+  const description = sanitizeText(raw.description ?? '')
+  const affirmation = sanitizeText(raw.affirmation ?? '')
+  const id = typeof raw.id === 'string' ? raw.id.trim() : undefined
+  if (!name && !description && !affirmation) return null
+  return {
+    id,
+    name: name || undefined,
+    description: description || undefined,
+    affirmation: affirmation || undefined
+  }
+}
+
+function parseAmbientSnapshot(raw: any): SessionAmbientSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null
+  const label = sanitizeText(raw.label ?? raw.name ?? '')
+  const description = sanitizeText(raw.description ?? '')
+  const id = typeof raw.id === 'string' ? raw.id.trim() : undefined
+  if (!label && !description) return null
+  return {
+    id,
+    label: label || undefined,
+    description: description || undefined
+  }
+}
+
+function parseSession(raw: any): SessionSummary | null {
+  if (!raw || typeof raw !== 'object') return null
+
+  const title = sanitizeText(raw.title, '專注任務')
+  const minutesPlanned = toPositiveMinutes(raw.minutesPlanned)
+  const minutesActual = toPositiveMinutes(raw.minutesActual) ?? minutesPlanned ?? null
+  if (!minutesActual && !minutesPlanned) return null
+
+  const startedAt = toTimestamp(raw.startedAt)
+  const finishedAt = toTimestamp(raw.finishedAt)
+
+  let finishedEarly: boolean | undefined
+  if (typeof raw.finishedEarly === 'boolean') {
+    finishedEarly = raw.finishedEarly
+  } else if (minutesPlanned != null && minutesActual != null) {
+    finishedEarly = minutesActual < minutesPlanned
+  }
+
+  return {
+    title,
+    minutesPlanned: minutesPlanned ?? minutesActual ?? 1,
+    minutesActual: minutesActual ?? minutesPlanned ?? 1,
+    startedAt,
+    finishedAt,
+    finishedEarly,
+    intent: parseIntentSnapshot(raw.intent),
+    ambient: parseAmbientSnapshot(raw.ambient)
+  }
+}
 
 function parseBody(req: VercelRequest): NormalizedBody {
   const incoming = req as VercelRequestWithRawBody
@@ -54,12 +160,11 @@ function parseBody(req: VercelRequest): NormalizedBody {
     }
   })()
 
-  let prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : ''
-  if (prompt.length > MAX_PROMPT_LENGTH) {
-    prompt = prompt.slice(0, MAX_PROMPT_LENGTH)
-  }
+  const prompt = clampPrompt(typeof body?.prompt === 'string' ? body.prompt.trim() : '')
   const locale = normalizeLocale(typeof body?.locale === 'string' ? body.locale : undefined)
-  return { prompt, locale }
+  const session = parseSession(body?.session)
+
+  return { prompt, locale, session }
 }
 
 function ensureToken(): string {
@@ -98,37 +203,52 @@ async function callHuggingFace(
       } catch {
         // ignore
       }
+      if (response.status === 403 || response.status === 404) {
+        message = `${message}. Verify that your token can access ${modelId} (accept the model licence on Hugging Face).`
+      }
       const err = new Error(message)
       ;(err as any).status = response.status
       throw err
     }
 
     if (expectBinary) {
-      return Buffer.from(await response.arrayBuffer())
+      const buffer = Buffer.from(await response.arrayBuffer())
+      if (!buffer.length) {
+        throw new Error('Empty binary response from Hugging Face')
+      }
+      return buffer
     }
 
-    return await response.json()
+    return response.json()
   } finally {
     clearTimeout(timeout)
   }
 }
 
 function extractMessageContent(message: any): { text: string; raw: string } {
-  if (!message) return { text: '', raw: '' }
+  if (!message) {
+    return { text: '', raw: '' }
+  }
   const { content } = message
   if (typeof content === 'string') {
     return { text: content.trim(), raw: content }
   }
   if (Array.isArray(content)) {
-    const strings = content.map((part) => {
-      if (typeof part === 'string') return part
-      if (typeof part?.text === 'string') return part.text
-      if (typeof part?.value === 'string') return part.value
-      return ''
-    })
-    const joined = strings.join(' ').trim()
+    const joined = content
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item
+        }
+        if (item && typeof item === 'object') {
+          if (typeof item.text === 'string') return item.text
+          if (typeof item.value === 'string') return item.value
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join(' ')
     return {
-      text: joined,
+      text: joined.trim(),
       raw: JSON.stringify(content)
     }
   }
@@ -147,6 +267,55 @@ function extractMessageContent(message: any): { text: string; raw: string } {
     return { text: message.trim(), raw: message }
   }
   return { text: '', raw: String(message) }
+}
+
+function buildEncouragementPrompt(session: SessionSummary): string {
+  const details: string[] = [
+    `Title: ${session.title}`,
+    `Planned duration: ${session.minutesPlanned} minutes`,
+    `Actual duration: ${session.minutesActual} minutes`
+  ]
+
+  if (session.finishedEarly === true) {
+    details.push('Outcome: The user wrapped up slightly earlier than planned – honour the effort, invite reflection, and encourage a balanced follow-up.')
+  } else if (session.finishedEarly === false) {
+    details.push('Outcome: The user stayed with the full plan – celebrate their steady focus and readiness for the next mindful step.')
+  }
+
+  if (session.intent) {
+    const parts: string[] = []
+    if (session.intent.name) parts.push(`Name: ${session.intent.name}`)
+    if (session.intent.description) parts.push(`Description: ${session.intent.description}`)
+    if (session.intent.affirmation) parts.push(`Related affirmation: ${session.intent.affirmation}`)
+    if (parts.length) {
+      details.push(`Focus intention -> ${parts.join(' | ')}`)
+    }
+  }
+
+  if (session.ambient) {
+    const parts: string[] = []
+    if (session.ambient.label) parts.push(session.ambient.label)
+    if (session.ambient.description) parts.push(session.ambient.description)
+    if (parts.length) {
+      details.push(`Ambient soundtrack: ${parts.join(' - ')}`)
+    }
+  }
+
+  if (session.startedAt) {
+    details.push(`Started at (UTC ms): ${session.startedAt}`)
+  }
+  if (session.finishedAt) {
+    details.push(`Finished at (UTC ms): ${session.finishedAt}`)
+  }
+
+  const instructions = [
+    'You are FlowNest, a gentle bilingual focus coach.',
+    'Craft one fresh encouragement in English (1-2 sentences) referencing the task title naturally.',
+    'Acknowledge the effort, name a positive observation, and suggest a grounded next step or reminder.',
+    'Keep the tone warm, specific, and sincere. No emoji. No questions.'
+  ]
+
+  return [...instructions, 'Session details:', ...details].join('\n')
 }
 
 async function generateAffirmation(prompt: string): Promise<{ english: string; raw: string }> {
@@ -228,8 +397,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!body.prompt) {
-    sendJson(res, 400, { error: 'Prompt is required' })
-    return
+    if (body.session) {
+      body.prompt = clampPrompt(buildEncouragementPrompt(body.session))
+    } else {
+      sendJson(res, 400, { error: 'Prompt or session context is required' })
+      return
+    }
   }
 
   try {

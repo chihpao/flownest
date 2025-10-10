@@ -14,6 +14,28 @@ const MAX_DIMENSION = Number(process.env.HF_IMAGE_MAX_DIMENSION || 1536)
 const NEGATIVE_FALLBACK = process.env.HF_IMAGE_NEGATIVE_PROMPT
   || 'blurry, watermark, text, logo, low quality, distorted, disfigured, nsfw'
 
+interface SessionIntentSnapshot {
+  id?: string
+  name?: string
+  description?: string
+  affirmation?: string
+}
+
+interface SessionAmbientSnapshot {
+  id?: string
+  label?: string
+  description?: string
+}
+
+interface SessionSummary {
+  title: string
+  minutesPlanned: number
+  minutesActual: number
+  finishedEarly?: boolean
+  intent?: SessionIntentSnapshot | null
+  ambient?: SessionAmbientSnapshot | null
+}
+
 interface ImageRequestBody {
   prompt: string
   negativePrompt?: string | null
@@ -21,6 +43,7 @@ interface ImageRequestBody {
   steps?: number
   width?: number
   height?: number
+  session?: SessionSummary | null
 }
 
 function clampDimension(value: number | undefined, fallback: number) {
@@ -30,7 +53,77 @@ function clampDimension(value: number | undefined, fallback: number) {
   return Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(numeric)))
 }
 
+function clampPrompt(value: string): string {
+  if (!value) return ''
+  if (value.length <= MAX_PROMPT_LENGTH) return value
+  return value.slice(0, MAX_PROMPT_LENGTH)
+}
+
 type VercelRequestWithRawBody = VercelRequest & { rawBody?: Buffer }
+
+function sanitizeText(value: unknown, fallback = ''): string {
+  if (typeof value !== 'string') return fallback
+  return value.replace(/\s+/g, ' ').trim() || fallback
+}
+
+function toPositiveMinutes(value: unknown): number | null {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  return Math.max(1, Math.round(numeric))
+}
+
+function parseIntentSnapshot(raw: any): SessionIntentSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null
+  const name = sanitizeText(raw.name ?? raw.title ?? '')
+  const description = sanitizeText(raw.description ?? '')
+  const affirmation = sanitizeText(raw.affirmation ?? '')
+  const id = typeof raw.id === 'string' ? raw.id.trim() : undefined
+  if (!name && !description && !affirmation) return null
+  return {
+    id,
+    name: name || undefined,
+    description: description || undefined,
+    affirmation: affirmation || undefined
+  }
+}
+
+function parseAmbientSnapshot(raw: any): SessionAmbientSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null
+  const label = sanitizeText(raw.label ?? raw.name ?? '')
+  const description = sanitizeText(raw.description ?? '')
+  const id = typeof raw.id === 'string' ? raw.id.trim() : undefined
+  if (!label && !description) return null
+  return {
+    id,
+    label: label || undefined,
+    description: description || undefined
+  }
+}
+
+function parseSession(raw: any): SessionSummary | null {
+  if (!raw || typeof raw !== 'object') return null
+
+  const title = sanitizeText(raw.title, '專注任務')
+  const minutesPlanned = toPositiveMinutes(raw.minutesPlanned)
+  const minutesActual = toPositiveMinutes(raw.minutesActual) ?? minutesPlanned ?? null
+  if (!minutesActual && !minutesPlanned) return null
+
+  let finishedEarly: boolean | undefined
+  if (typeof raw.finishedEarly === 'boolean') {
+    finishedEarly = raw.finishedEarly
+  } else if (minutesPlanned != null && minutesActual != null) {
+    finishedEarly = minutesActual < minutesPlanned
+  }
+
+  return {
+    title,
+    minutesPlanned: minutesPlanned ?? minutesActual ?? 1,
+    minutesActual: minutesActual ?? minutesPlanned ?? 1,
+    finishedEarly,
+    intent: parseIntentSnapshot(raw.intent),
+    ambient: parseAmbientSnapshot(raw.ambient)
+  }
+}
 
 function parseBody(req: VercelRequest): ImageRequestBody {
   const incoming = req as VercelRequestWithRawBody
@@ -44,16 +137,13 @@ function parseBody(req: VercelRequest): ImageRequestBody {
     }
   })()
 
-  let prompt = typeof raw?.prompt === 'string' ? raw.prompt.trim() : ''
-  if (prompt.length > MAX_PROMPT_LENGTH) {
-    prompt = prompt.slice(0, MAX_PROMPT_LENGTH)
-  }
-
+  const prompt = clampPrompt(typeof raw?.prompt === 'string' ? raw.prompt.trim() : '')
   const negativePrompt = typeof raw?.negativePrompt === 'string' ? raw.negativePrompt.trim() : undefined
   const guidanceScale = Number(raw?.guidanceScale)
   const steps = Number(raw?.steps)
   const width = Number(raw?.width)
   const height = Number(raw?.height)
+  const session = parseSession(raw?.session)
 
   return {
     prompt,
@@ -61,7 +151,8 @@ function parseBody(req: VercelRequest): ImageRequestBody {
     guidanceScale: Number.isFinite(guidanceScale) ? guidanceScale : undefined,
     steps: Number.isFinite(steps) ? steps : undefined,
     width: Number.isFinite(width) ? width : undefined,
-    height: Number.isFinite(height) ? height : undefined
+    height: Number.isFinite(height) ? height : undefined,
+    session
   }
 }
 
@@ -118,6 +209,38 @@ async function callHuggingFace(
   }
 }
 
+function buildImagePrompt(session: SessionSummary): { prompt: string; negativePrompt?: string } {
+  const tone = session.finishedEarly === true
+    ? 'gentle pause after focused work'
+    : 'radiant sense of completion and flow'
+
+  const descriptors: string[] = [
+    `dreamy illustration celebrating "${session.title}"`,
+    'soft cinematic lighting',
+    tone,
+    'clean workspace, mindful atmosphere',
+    'high detail, soothing colours, depth of field'
+  ]
+
+  if (session.intent?.name) {
+    descriptors.push(`inspired by the ${session.intent.name} focus intention`)
+  }
+  if (session.intent?.description) {
+    descriptors.push(session.intent.description)
+  }
+  if (session.ambient?.label) {
+    descriptors.push(`ambient music vibe: ${session.ambient.label}`)
+  }
+
+  const prompt = descriptors.join(', ')
+  const negativePrompt = 'harsh shadows, cluttered desk, dark horror mood, text overlays, watermark'
+
+  return {
+    prompt,
+    negativePrompt
+  }
+}
+
 function sendJson(res: VercelResponse, status: number, payload: Record<string, unknown>) {
   res.status(status)
   res.setHeader('Content-Type', 'application/json')
@@ -142,8 +265,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = parseBody(req)
   if (!body.prompt) {
-    sendJson(res, 400, { error: 'Prompt is required' })
-    return
+    if (body.session) {
+      const auto = buildImagePrompt(body.session)
+      body.prompt = clampPrompt(auto.prompt)
+      if (!body.negativePrompt) {
+        body.negativePrompt = auto.negativePrompt
+      }
+    } else {
+      sendJson(res, 400, { error: 'Prompt or session context is required' })
+      return
+    }
   }
 
   const guidance = body.guidanceScale && body.guidanceScale > 0 ? Math.min(15, Math.max(1, body.guidanceScale)) : 7.5

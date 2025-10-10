@@ -1,6 +1,13 @@
-// src/stores/useAiCoach.ts
 import { defineStore } from 'pinia'
-import { generateEncouragement, generateSupportImage, type EncouragementRequest, type EncouragementResponse, type ImageRequest, type ImageResponse } from '@/api/encouragement'
+import {
+  generateEncouragement,
+  generateSupportImage,
+  type EncouragementRequest,
+  type EncouragementResponse,
+  type FocusSessionContext,
+  type ImageRequest,
+  type ImageResponse
+} from '@/api/encouragement'
 
 export interface EncouragementEntry {
   id: string
@@ -64,11 +71,39 @@ function saveToStorage<T>(key: string, value: T[]) {
   }
 }
 
-function mapEncouragementResponse(prompt: string, locale: string, data: EncouragementResponse): EncouragementEntry {
+function resolveAiErrorMessage(error: unknown, kind: 'encouragement' | 'image') {
+  const fallback = kind === 'encouragement'
+    ? '暫時無法生成鼓勵語，請稍後再試。'
+    : '暫時無法生成支援圖像，請稍後再試。'
+  if (!error || typeof error !== 'object') {
+    return fallback
+  }
+  const rawMessage = typeof (error as any).message === 'string' ? (error as any).message.trim() : ''
+  const status = typeof (error as any).status === 'number' ? (error as any).status : undefined
+  if (rawMessage.includes('Hugging Face API key')) {
+    return '尚未設定 Hugging Face API key，請在 .env.local 中加入 HUGGINGFACE_API_KEY 後重新啟動。'
+  }
+  const lowered = rawMessage.toLowerCase()
+  if (lowered.includes('failed to fetch') || lowered.includes('ai 服務無法連線')) {
+    return 'AI 服務無法連線，請確認已啟動 `vercel dev` 或檢查網路後再試。'
+  }
+  if (/request failed with status 500/i.test(rawMessage) || /econnrefused|connect/i.test(rawMessage) || status === 500) {
+    return 'AI 服務尚未啟動或連線中斷，請確認後端服務可用後再試。'
+  }
+  if (status === 429) {
+    return 'AI 服務暫時超出流量限制，請稍後再試。'
+  }
+  if (status === 401 || status === 403) {
+    return 'AI 服務驗證失敗，請檢查 Hugging Face API key 權限。'
+  }
+  return rawMessage || fallback
+}
+
+function mapEncouragementResponse(data: EncouragementResponse): EncouragementEntry {
   return {
     id: makeId(),
-    prompt,
-    locale,
+    prompt: data.prompt || '',
+    locale: data.locale,
     englishText: data.englishText,
     translatedText: data.translatedText ?? null,
     model: data.model,
@@ -78,10 +113,10 @@ function mapEncouragementResponse(prompt: string, locale: string, data: Encourag
   }
 }
 
-function mapImageResponse(prompt: string, data: ImageResponse): SupportImageEntry {
+function mapImageResponse(data: ImageResponse): SupportImageEntry {
   return {
     id: makeId(),
-    prompt,
+    prompt: data.prompt || '',
     imageBase64: data.imageBase64,
     model: data.model,
     guidanceScale: data.guidanceScale,
@@ -97,6 +132,7 @@ function mapImageResponse(prompt: string, data: ImageResponse): SupportImageEntr
 export const useAiCoach = defineStore('aiCoach', {
   state: () => ({
     initialized: false,
+    sessionContext: null as FocusSessionContext | null,
     encouragementHistory: [] as EncouragementEntry[],
     supportImageHistory: [] as SupportImageEntry[],
     encouragementLoading: false,
@@ -106,7 +142,8 @@ export const useAiCoach = defineStore('aiCoach', {
   }),
   getters: {
     latestEncouragement: (s) => s.encouragementHistory[0] ?? null,
-    latestImage: (s) => s.supportImageHistory[0] ?? null
+    latestImage: (s) => s.supportImageHistory[0] ?? null,
+    hasSessionContext: (s) => Boolean(s.sessionContext)
   },
   actions: {
     init() {
@@ -114,6 +151,10 @@ export const useAiCoach = defineStore('aiCoach', {
       this.initialized = true
       this.encouragementHistory = loadFromStorage<EncouragementEntry>(STORAGE_KEY_TEXT)
       this.supportImageHistory = loadFromStorage<SupportImageEntry>(STORAGE_KEY_IMAGE)
+    },
+
+    setSessionContext(context: FocusSessionContext | null) {
+      this.sessionContext = context
     },
 
     upsertEncouragement(entry: EncouragementEntry) {
@@ -141,11 +182,11 @@ export const useAiCoach = defineStore('aiCoach', {
       this.encouragementError = ''
       try {
         const response = await generateEncouragement(payload)
-        const entry = mapEncouragementResponse(payload.prompt, response.locale, response)
+        const entry = mapEncouragementResponse(response)
         this.upsertEncouragement(entry)
         return entry
       } catch (error: any) {
-        this.encouragementError = error?.message ?? 'Failed to generate encouragement.'
+        this.encouragementError = resolveAiErrorMessage(error, 'encouragement')
         throw error
       } finally {
         this.encouragementLoading = false
@@ -159,15 +200,36 @@ export const useAiCoach = defineStore('aiCoach', {
       this.imageError = ''
       try {
         const response = await generateSupportImage(payload)
-        const entry = mapImageResponse(payload.prompt, response)
+        const entry = mapImageResponse(response)
         this.upsertSupportImage(entry)
         return entry
       } catch (error: any) {
-        this.imageError = error?.message ?? 'Failed to generate image.'
+        this.imageError = resolveAiErrorMessage(error, 'image')
         throw error
       } finally {
         this.imageLoading = false
       }
+    },
+
+    async generateForSession(context: FocusSessionContext, options: { locale?: string } = {}) {
+      this.init()
+      this.setSessionContext(context)
+      const locale = options.locale ?? 'zh'
+      await Promise.allSettled([
+        this.requestEncouragement({ session: context, locale }),
+        this.requestSupportImage({ session: context })
+      ])
+    },
+
+    async regenerateEncouragement(options: { locale?: string } = {}) {
+      if (!this.sessionContext) return null
+      const locale = options.locale ?? 'zh'
+      return this.requestEncouragement({ session: this.sessionContext, locale })
+    },
+
+    async regenerateSupportImage() {
+      if (!this.sessionContext) return null
+      return this.requestSupportImage({ session: this.sessionContext })
     }
   }
 })

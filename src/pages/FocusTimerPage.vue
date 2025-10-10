@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import ThreeBreathingSphere from '@/components/ThreeBreathingSphere.vue'
 import { useSessions } from '@/stores/useSessions'
 import { findIntentById, findAmbientById } from '@/config/sessionPresets'
+import { useAiCoach } from '@/stores/useAiCoach'
+import type { FocusSessionContext } from '@/api/encouragement'
 import { postAchievement } from '@/api/posts'
 import { useAuth } from '@/stores/useAuth'
 import { useLoginRedirect } from '@/composables/useLoginRedirect'
@@ -16,8 +18,11 @@ const sessions = useSessions()
 const auth = useAuth()
 const { pushLogin } = useLoginRedirect()
 
+const aiCoach = useAiCoach()
+aiCoach.init()
+
 const state = ref<'running' | 'finished'>('running')
-const activeTitle = ref('專注時段')
+const activeTitle = ref('專注時光')
 const minutesPlanned = ref(25)
 const remainingSeconds = ref(0)
 const startedAtMs = ref<number | null>(null)
@@ -86,7 +91,7 @@ function startCountdownFromRoute() {
   }
   minutesPlanned.value = Math.min(600, Math.max(1, Math.round(minutesParam)))
   const titleParam = (route.query.title as string | undefined)?.trim()
-  activeTitle.value = titleParam && titleParam.length ? titleParam : (selectedIntent.value?.name ?? '專注時段')
+  activeTitle.value = titleParam && titleParam.length ? titleParam : (selectedIntent.value?.name ?? '專注時光')
   startedAtMs.value = Date.now()
   deadlineMs.value = startedAtMs.value + minutesPlanned.value * 60_000
   remainingSeconds.value = minutesPlanned.value * 60
@@ -94,6 +99,9 @@ function startCountdownFromRoute() {
   errorMessage.value = ''
   state.value = 'running'
   spherePaletteIndex.value = 0
+  aiCoach.setSessionContext(null)
+  aiCoach.clearEncouragementError()
+  aiCoach.clearImageError()
   updateRemaining()
   clearTimer()
   timerHandle = window.setInterval(updateRemaining, 1000)
@@ -114,7 +122,7 @@ onBeforeUnmount(() => {
   clearTimer()
 })
 
-async function completeSession() {
+async function completeSession(options: { finishedEarly?: boolean } = {}) {
   if (state.value !== 'running' || !startedAtMs.value) return
   clearTimer()
   remainingSeconds.value = 0
@@ -123,11 +131,38 @@ async function completeSession() {
   state.value = 'finished'
 
   const minutesActual = Math.max(1, Math.round((finishedAt - startedAtMs.value) / 60_000))
+  const finishedEarly = Boolean(options.finishedEarly)
   const payload = {
     title: activeTitle.value,
     minutesPlanned: minutesPlanned.value,
     startedAt: startedAtMs.value,
     finishedAt,
+  }
+
+  const sessionContext: FocusSessionContext = {
+    title: payload.title,
+    minutesPlanned: payload.minutesPlanned,
+    minutesActual,
+    startedAt: payload.startedAt,
+    finishedAt,
+    finishedEarly,
+  }
+
+  if (selectedIntent.value) {
+    sessionContext.intent = {
+      id: selectedIntent.value.id,
+      name: selectedIntent.value.name,
+      description: selectedIntent.value.description,
+      affirmation: selectedIntent.value.affirmation,
+    }
+  }
+
+  if (selectedAmbient.value) {
+    sessionContext.ambient = {
+      id: selectedAmbient.value.id,
+      label: selectedAmbient.value.label,
+      description: selectedAmbient.value.description,
+    }
   }
 
   logging.value = true
@@ -141,9 +176,10 @@ async function completeSession() {
       startedAt: payload.startedAt,
       finishedAt,
     }
-    shareMessage.value = `完成專注：「${payload.title}」`
+    shareMessage.value = `分享這次專注：《${payload.title}》`
     shareStatus.value = 'idle'
     shareError.value = ''
+    aiCoach.generateForSession(sessionContext, { locale: 'zh' }).catch(() => {})
   } catch (err: any) {
     errorMessage.value = err?.message ?? String(err)
   } finally {
@@ -152,7 +188,7 @@ async function completeSession() {
 }
 
 function finishNow() {
-  completeSession()
+  completeSession({ finishedEarly: true })
 }
 
 function cancelSession() {
@@ -171,7 +207,7 @@ function goToDone() {
 async function shareToWall() {
   if (!lastSession.value) return
   if (!shareMessage.value.trim()) {
-    shareError.value = '請先輸入想分享的內容'
+    shareError.value = '請輸入想分享的內容'
     return
   }
   if (!auth.isAuthed) {
@@ -199,7 +235,7 @@ async function shareToWall() {
 
 watch(() => lastSession.value?.title, (title) => {
   if (title) {
-    shareMessage.value = `完成專注：「${title}」`
+    shareMessage.value = `分享這次專注：《${title}》`
   }
 })
 
@@ -297,7 +333,7 @@ watch(shareMessage, () => {
           <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 text-sm text-slate-600">
             <div class="flex items-center justify-between">
               <p class="font-semibold text-slate-800">分享至留言牆</p>
-              <span v-if="shareStatus === 'success'" class="text-xs font-semibold text-emerald-600">已送出！</span>
+              <span v-if="shareStatus === 'success'" class="text-xs font-semibold text-emerald-600">已發佈</span>
             </div>
             <textarea
               v-model="shareMessage"
@@ -306,18 +342,18 @@ watch(shareMessage, () => {
               class="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             ></textarea>
             <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-              <p>{{ auth.isAuthed ? '按下分享即可在留言牆看到成果。' : '登入後即可分享專注成果。' }}</p>
+              <p>{{ auth.isAuthed ? '已登入，可以直接發佈成果。' : '請登入後再分享專注成果。' }}</p>
               <button
                 type="button"
                 class="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
                 :disabled="sharing"
                 @click="shareToWall"
               >
-                {{ sharing ? '分享中…' : '分享至留言牆' }}
+                {{ sharing ? '分享中…' : '分享到留言牆' }}
               </button>
             </div>
             <p v-if="shareError" class="text-xs text-rose-500">{{ shareError }}</p>
-            <p v-else-if="shareStatus === 'success'" class="text-xs text-emerald-500">成功分享！可前往留言牆查看。</p>
+            <p v-else-if="shareStatus === 'success'" class="text-xs text-emerald-500">分享成功！記得去留言牆看看。</p>
           </div>
         </div>
         <div class="grid gap-4 md:grid-cols-2">

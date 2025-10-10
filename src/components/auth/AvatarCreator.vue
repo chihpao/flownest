@@ -1,41 +1,28 @@
-<template>
+﻿<template>
   <transition name="avatar-overlay">
     <div v-if="open" class="avatar-overlay">
       <div class="avatar-panel">
         <header class="space-y-1">
           <p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-500">AI 頭像工作室</p>
-          <h2 class="text-xl font-semibold text-slate-800">幫自己做一個可愛的分身</h2>
+          <h2 class="text-xl font-semibold text-slate-800">幫自己生成一張可愛的專屬形象</h2>
           <p class="text-sm text-slate-500">
-            使用相同的 AI 生圖服務產出 512 x 512 的方形頭像。請輸入想像中的樣子，我們會輔助加入聚焦於臉部、乾淨背景的提示。
+            請用一句話描述你理想的頭像樣貌（可包含風格、姿態或情緒）。我們會自動套用建議光線與構圖設定，生成 512 x 512 的方形圖片。
           </p>
         </header>
 
         <form class="space-y-4" @submit.prevent="handleGenerate">
           <label class="space-y-2">
-            <span class="text-xs font-semibold text-slate-600">想像提示詞 Prompt</span>
+            <span class="text-xs font-semibold text-slate-600">提示 Prompt</span>
             <textarea
               v-model="prompt"
               rows="3"
               class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-              placeholder="例：可愛療癒的小生物，圓滾滾身形，亮晶晶的大眼睛，看向右手邊，柔和光線。"
+              placeholder="例：柔和光線下的療癒系生物，圓滾滾身形、亮晶晶大眼睛，對著鏡頭微笑"
               @input="clearError"
             />
           </label>
 
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label class="flex items-center gap-2 text-xs text-slate-500">
-              <span>風格設定</span>
-              <select
-                v-model="styleId"
-                class="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
-                @change="clearError"
-              >
-                <option v-for="style in styles" :key="style.id" :value="style.id">
-                  {{ style.label }}
-                </option>
-              </select>
-            </label>
-
+          <div class="flex justify-end">
             <button
               type="submit"
               class="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-400 disabled:opacity-60"
@@ -43,9 +30,9 @@
             >
               <span v-if="generating" class="flex items-center gap-2">
                 <span class="h-3 w-3 animate-spin rounded-full border-2 border-white/70 border-t-transparent"></span>
-                產生中...
+                生成中...
               </span>
-              <span v-else>產生頭像</span>
+              <span v-else>開始生成</span>
             </button>
           </div>
         </form>
@@ -60,44 +47,43 @@
             </div>
             <figcaption class="flex-1 space-y-1 text-xs text-emerald-700">
               <p>尺寸：{{ AVATAR_WIDTH }} x {{ AVATAR_HEIGHT }} px．PNG</p>
-              <p>如果不喜歡可以重新輸入提示詞再試一次。</p>
+              <p>如果想調整，可以更換描述後再次生成。</p>
             </figcaption>
           </figure>
 
           <div class="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
-              class="inline-flex flex-1 items-center justify-center rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-500 disabled:opacity-60"
+              class="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
               :disabled="saving"
               @click="handleSave"
             >
               <span v-if="saving" class="flex items-center gap-2">
                 <span class="h-3 w-3 animate-spin rounded-full border-2 border-white/70 border-t-transparent"></span>
-                儲存頭像...
+                儲存中...
               </span>
-              <span v-else>使用這張頭像</span>
+              <span v-else>設為頭像</span>
             </button>
             <button
               type="button"
-              class="inline-flex flex-1 items-center justify-center rounded-full border border-emerald-300 bg-white px-5 py-2 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-60"
-              :disabled="generating || saving"
+              class="inline-flex items-center justify-center rounded-full border border-emerald-200 px-5 py-2 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50"
+              :disabled="generating"
               @click="handleGenerate"
             >
-              再試一張
+              再試一次
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
+              @click="handleSkip"
+            >
+              之後再說
             </button>
           </div>
         </div>
 
-        <div class="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>隨時可以在個人設定中再次更換。</p>
-          <button
-            type="button"
-            class="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-600"
-            :disabled="saving || generating"
-            @click="handleSkip"
-          >
-            先跳過，稍後再說
-          </button>
+        <div v-else class="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-slate-400">
+          點擊「開始生成」後會在這裡預覽結果。
         </div>
       </div>
     </div>
@@ -105,43 +91,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch, ref } from 'vue'
 import { generateSupportImage } from '@/api/encouragement'
 import { useAuth } from '@/stores/useAuth'
 
 const AVATAR_WIDTH = 512
 const AVATAR_HEIGHT = 512
+const STYLE_HINT = 'soft pastel character illustration, warm studio lighting, smooth shading, gentle smile, clean studio background'
+const BASE_CONTEXT = 'centered portrait, shoulders up, high quality, no text, no watermark'
+const NEGATIVE_HINT = 'text, watermark, logo, extra limbs, blurry, distorted, nsfw'
 
-interface StyleOption {
-  id: string
-  label: string
-  promptSuffix: string
-  negativePrompt?: string
-}
-
-const styles: StyleOption[] = [
-  {
-    id: 'kawaii-soft',
-    label: '柔和插畫',
-    promptSuffix: 'soft pastel colors, kawaii character design, smooth shading, simple clean background'
-  },
-  {
-    id: 'bubble-toy',
-    label: '玩具公仔',
-    promptSuffix: 'vinyl toy render, studio lighting, glossy finish, centered composition'
-  },
-  {
-    id: 'storybook',
-    label: '故事書風',
-    promptSuffix: 'storybook illustration, watercolor texture, warm lighting, gentle expression'
-  }
-]
-
-const props = defineProps<{
-  open: boolean
-}>()
-
+const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
+  (e: 'close'): void
   (e: 'skip'): void
   (e: 'saved', data: string): void
 }>()
@@ -149,13 +111,11 @@ const emit = defineEmits<{
 const auth = useAuth()
 
 const prompt = ref('可愛療癒的小生物，圓滾滾身形，亮晶晶的大眼睛，看向右手邊，柔和光線。')
-const styleId = ref<StyleOption['id']>(styles[0].id)
 const generating = ref(false)
 const saving = ref(false)
 const error = ref('')
 const imageData = ref<string | null>(null)
 
-const activeStyle = computed(() => styles.find((style) => style.id === styleId.value) ?? styles[0])
 const promptReady = computed(() => prompt.value.trim().length > 6)
 const generateDisabled = computed(() => generating.value || saving.value || !promptReady.value)
 
@@ -173,7 +133,6 @@ function reset() {
   generating.value = false
   saving.value = false
   imageData.value = null
-  styleId.value = styles[0].id
   prompt.value = '可愛療癒的小生物，圓滾滾身形，亮晶晶的大眼睛，看向右手邊，柔和光線。'
 }
 
@@ -190,19 +149,11 @@ async function handleGenerate() {
 
   try {
     const basePrompt = prompt.value.trim()
-    const style = activeStyle.value
-    const combinedPrompt = [
-      basePrompt,
-      'centered portrait, shoulders up, big expressive eyes, looking slightly right',
-      'clean studio background, high quality, no text'
-    ]
-    if (style?.promptSuffix) {
-      combinedPrompt.push(style.promptSuffix)
-    }
+    const combinedPrompt = [basePrompt, STYLE_HINT, BASE_CONTEXT]
 
     const response = await generateSupportImage({
       prompt: combinedPrompt.join(', '),
-      negativePrompt: style?.negativePrompt ?? 'text, watermark, logo, extra limbs, blurry, distorted, nsfw',
+      negativePrompt: NEGATIVE_HINT,
       width: AVATAR_WIDTH,
       height: AVATAR_HEIGHT,
       guidanceScale: 7.5,
@@ -210,7 +161,7 @@ async function handleGenerate() {
     })
     imageData.value = response.imageBase64
   } catch (e: any) {
-    error.value = e?.message ?? '產生頭像失敗，請稍後再試。'
+    error.value = e?.message ?? '生成失敗，請稍後再試一次。'
   } finally {
     generating.value = false
   }
@@ -224,7 +175,7 @@ async function handleSave() {
     await auth.updateAvatar(imageData.value)
     emit('saved', imageData.value)
   } catch (e: any) {
-    error.value = e?.message ?? '儲存頭像失敗，請再試一次。'
+    error.value = e?.message ?? '儲存失敗，請再試一次。'
   } finally {
     saving.value = false
   }
