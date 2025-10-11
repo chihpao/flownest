@@ -1,7 +1,7 @@
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+﻿<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import PrimaryButton from '@/components/PrimaryButton.vue'
+import { UiButton, UiCard } from '@/components/ui'
 import { useBgm } from '@/components/useBgm'
 import { AMBIENT_TRACKS, findAmbientById } from '@/config/sessionPresets'
 
@@ -12,17 +12,13 @@ const title = ref('')
 const presetDurations = [15, 30, 45]
 const selectedDuration = ref(presetDurations[1])
 const customDuration = ref('')
-const selectedAmbientId = ref(AMBIENT_TRACKS[0].id)
+const selectedAmbientId = ref(AMBIENT_TRACKS[0]?.id ?? '')
 
-const selectedAmbient = computed(() => findAmbientById(selectedAmbientId.value))
-
-const availableDurations = computed(() => {
-  return presetDurations
-})
+const selectedAmbient = computed(() => findAmbientById(selectedAmbientId.value) ?? AMBIENT_TRACKS[0])
 
 const previewTitle = computed(() => {
   const trimmed = title.value.trim()
-  return trimmed.length ? trimmed : '專注時段'
+  return trimmed.length ? trimmed : '專注任務'
 })
 
 const parsedCustom = computed(() => {
@@ -43,17 +39,18 @@ const effectiveMinutes = computed<number | null>(() => {
 })
 
 const isCustomValid = computed(() => parsedCustom.value !== null && !Number.isNaN(parsedCustom.value))
-const canStart = computed(() => effectiveMinutes.value !== null)
+const canStart = computed(() => effectiveMinutes.value !== null && !!selectedAmbient.value)
 
 onMounted(() => {
+  if (!selectedAmbient.value) return
   const current = source.value
-  const matched = current ? AMBIENT_TRACKS.find((track) => current.includes(track.url)) : null
+  const matched = current ? AMBIENT_TRACKS.find((track) => track.url && current.includes(track.url)) : null
   if (matched) {
     selectedAmbientId.value = matched.id
     return
   }
   const desired = selectedAmbient.value.url
-  if (!current || !current.includes(desired)) {
+  if (desired && (!current || !current.includes(desired))) {
     setSource(desired).catch(() => {})
   }
 })
@@ -77,7 +74,7 @@ async function handleAmbientSelect(id: string) {
 }
 
 async function handleStart() {
-  if (!canStart.value || effectiveMinutes.value === null) return
+  if (!canStart.value || effectiveMinutes.value === null || !selectedAmbient.value) return
   const query: Record<string, string> = {
     m: String(effectiveMinutes.value),
     ambient: selectedAmbient.value.id,
@@ -94,116 +91,138 @@ async function handleStart() {
 </script>
 
 <template>
-  <main class="relative min-h-screen w-full bg-gradient-to-b from-white via-emerald-50/40 to-slate-50 px-4 pb-28 sm:px-6 sm:pb-[env(safe-area-inset-bottom)]">
-    <section class="mx-auto flex w-full max-w-6xl flex-col gap-10">
-      <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] animate-fade-up">
-        <article class="glass-panel animate-fade-scale space-y-6 p-6">
-          <div class="space-y-3">
-            <label class="block text-sm font-semibold text-slate-700">專注主題</label>
+  <div class="space-y-8">
+    <header class="space-y-2 text-center md:text-left motion-safe:animate-fade-up">
+      <h1 class="text-2xl font-semibold text-ink-900">規劃下一段專注時段</h1>
+      <p class="text-sm text-ink-500">
+        在開始計時前設定標題、時間與環境音。
+      </p>
+    </header>
+
+    <div class="grid gap-6 md:grid-cols-[minmax(0,_1fr)_minmax(0,_0.85fr)]">
+      <UiCard class="motion-safe:animate-fade-up">
+        <template #header>
+          專注內容
+        </template>
+        <div class="space-y-6">
+          <div class="space-y-2">
+            <label for="focus-title" class="text-sm font-semibold text-ink-600">專注標題</label>
             <input
+              id="focus-title"
               v-model="title"
               type="text"
-              placeholder="例如：整理會議紀要"
-              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              autocomplete="off"
+              placeholder="例如：深度工作衝刺"
+              class="field"
             />
           </div>
 
           <div class="space-y-4">
-            <label class="block text-sm font-semibold text-slate-700">專注時長</label>
-            <div class="grid gap-3 sm:grid-cols-3">
-              <div v-for="minutes in availableDurations" :key="minutes" class="relative">
-                <button
+            <div class="space-y-2">
+              <p class="text-sm font-semibold text-ink-600">專注時長</p>
+              <div class="grid gap-2 sm:grid-cols-3">
+                <UiButton
+                  v-for="minutes in presetDurations"
+                  :key="minutes"
                   type="button"
-                  class="w-full rounded-2xl border px-4 py-2 text-sm font-semibold transition"
-                  :class="customDuration.trim() === '' && selectedDuration === minutes
-                    ? 'border-emerald-400 bg-emerald-100 text-emerald-700 shadow'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-600'
-                  "
+                  :variant="customDuration.trim() === '' && selectedDuration === minutes ? 'primary' : 'ghost'"
+                  class="w-full justify-center"
+                  :aria-pressed="customDuration.trim() === '' && selectedDuration === minutes"
                   @click="handleTimeSelect(minutes)"
                 >
                   {{ minutes }} 分鐘
-                </button>
+                </UiButton>
               </div>
             </div>
 
-            <div class="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 p-4">
-              <label class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">自訂時長</label>
-              <div class="mt-2 flex items-center gap-3">
+            <div class="space-y-3 rounded-2xl border border-dashed border-brand-200 bg-brand-50/60 p-4">
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">自訂時長</p>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <input
+                  id="custom-duration"
                   v-model="customDuration"
                   type="number"
                   inputmode="numeric"
                   min="5"
                   max="600"
-                  placeholder="輸入 5 - 600"
-                  class="w-full rounded-full border border-emerald-200 bg-white px-4 py-2 text-center text-lg font-semibold text-emerald-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  placeholder="5 - 600"
+                  class="field text-center text-lg font-semibold"
+                  aria-describedby="custom-duration-help"
                 />
-                <span class="text-sm text-slate-500">分鐘</span>
+                <span class="text-sm font-medium text-ink-500 sm:ml-1">分鐘</span>
               </div>
-              <p class="mt-2 text-xs text-slate-500">
-                {{ isCustomValid || customDuration.trim() === '' ? '設定一個合適的專注時長，建議 25 - 90 分鐘' : '請輸入 5 到 600 的整數分鐘' }}
+              <p id="custom-duration-help" class="text-xs text-ink-500">
+                {{ isCustomValid || customDuration.trim() === '' ? '建議維持在 25 到 90 分鐘，最能保持專注。' : '請輸入 5 到 600 的數字。' }}
               </p>
             </div>
           </div>
-
-          <div class="space-y-4 pt-2">
-            <PrimaryButton
-              label="開始專注"
+        </div>
+        <template #footer>
+          <div class="flex flex-col gap-3">
+            <UiButton
+              type="button"
+              variant="primary"
+              class="w-full justify-center"
               :disabled="!canStart"
               @click="handleStart"
-            />
-            <p class="text-xs text-slate-500">提醒：專注期間請保持視窗開啟，倒數歸零時會自動產生一筆專注紀錄。</p>
+            >
+              開始專注計時
+            </UiButton>
+            <p class="text-xs text-ink-400">
+              提示：保持分頁在前景以確保倒數準確，完成後會自動儲存紀錄。
+            </p>
           </div>
-        </article>
+        </template>
+      </UiCard>
 
-        <aside class="space-y-6">
-          <article class="glass-panel animate-fade-scale space-y-4 p-6">
-            <header class="space-y-1">
-              <h2 class="text-lg font-semibold text-slate-800">環境音景配方</h2>
-            </header>
-            <ul class="space-y-3">
-              <li
-                v-for="track in AMBIENT_TRACKS"
-                :key="track.id"
-                class="cursor-pointer select-none rounded-2xl border px-4 py-3 transition"
-                :class="track.id === selectedAmbientId
-                  ? 'border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100'
-                  : 'border-slate-200 bg-white hover:border-emerald-200 hover:shadow'
-                "
+      <div class="space-y-6">
+        <UiCard class="motion-safe:animate-fade-up">
+          <template #header>
+            環境音
+          </template>
+          <ul class="space-y-2">
+            <li v-for="track in AMBIENT_TRACKS" :key="track.id">
+              <UiButton
+                type="button"
+                :variant="track.id === selectedAmbientId ? 'primary' : 'ghost'"
+                class="w-full items-start justify-between text-left"
+                :aria-pressed="track.id === selectedAmbientId"
                 @click="handleAmbientSelect(track.id)"
               >
-                <div class="flex items-center justify-between">
-                  <h3 class="text-base font-semibold text-slate-800">{{ track.label }}</h3>
-                  <span class="text-xs font-semibold text-emerald-500">{{ track.id === selectedAmbientId ? '已選擇' : '點擊套用' }}</span>
-                </div>
-                <p class="mt-1 text-sm leading-relaxed text-slate-500">{{ track.description }}</p>
-              </li>
-            </ul>
-          </article>
+                <span class="flex flex-col gap-1 text-sm">
+                  <span class="font-semibold text-ink-800">{{ track.label }}</span>
+                  <span class="text-xs text-ink-500">{{ track.description }}</span>
+                </span>
+                <span v-if="track.id === selectedAmbientId" class="badge">已選擇</span>
+              </UiButton>
+            </li>
+          </ul>
+        </UiCard>
 
-          <article class="glass-panel-soft animate-fade-up space-y-4 p-6">
-            <header class="space-y-1">
-              <h2 class="text-lg font-semibold text-emerald-700">專注摘要</h2>
-            </header>
-
-            <ul class="space-y-2 text-sm text-emerald-700">
-              <li class="flex items-center justify-between">
-                <span>專注主題</span>
-                <span class="font-semibold">{{ previewTitle }}</span>
-              </li>
-              <li class="flex items-center justify-between">
-                <span>專注時長</span>
-                <span class="font-semibold">{{ (effectiveMinutes ?? '—') }} 分鐘</span>
-              </li>
-              <li class="flex items-center justify-between">
-                <span>環境氛圍</span>
-                <span class="font-semibold">{{ selectedAmbient.label }}</span>
-              </li>
-            </ul>
-          </article>
-        </aside>
+        <UiCard class="motion-safe:animate-fade-up">
+          <template #header>
+            設定摘要
+          </template>
+          <dl class="space-y-3 text-sm text-ink-600">
+            <div class="flex items-center justify-between gap-4">
+              <dt>標題</dt>
+              <dd class="font-semibold text-ink-800">{{ previewTitle }}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-4">
+              <dt>預計時長</dt>
+              <dd class="font-semibold text-ink-800">
+                {{ effectiveMinutes ?? '—' }} 分鐘
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-4">
+              <dt>環境音</dt>
+              <dd class="font-semibold text-ink-800">
+                {{ selectedAmbient?.label ?? '預設' }}
+              </dd>
+            </div>
+          </dl>
+        </UiCard>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 </template>
-

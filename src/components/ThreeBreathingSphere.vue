@@ -18,13 +18,16 @@ let desiredFilterIndex = typeof props.paletteIndex === 'number' ? props.paletteI
 let rendererReady = false
 
 watch(() => props.paletteIndex, (value) => {
-  desiredFilterIndex = typeof value === 'number' ? value : 0
+  const total = FILTER_PRESETS.length || 1
+  const normalized = ((Math.round(typeof value === 'number' ? value : 0) % total) + total) % total
+  desiredFilterIndex = normalized
   if (rendererReady) {
-    applyFilter(desiredFilterIndex)
+    applyFilter(normalized)
+    applyPalette(normalized)
   }
 })
 
-// three.js 物件
+// three.js ?件
 let renderer: THREEType.WebGLRenderer | null = null
 let scene: THREEType.Scene | null = null
 let camera: THREEType.PerspectiveCamera | null = null
@@ -32,15 +35,15 @@ let mainSphere: THREEType.Mesh<THREEType.SphereGeometry, THREEType.MeshPhysicalM
 let breathingLight: THREEType.PointLight | null = null
 let zenLight: THREEType.PointLight | null = null
 
-// 粒子 / 星塵
+// 粒? / ?塵
 let floatingParticles: THREEType.Points<THREEType.BufferGeometry, THREEType.ShaderMaterial> | null = null
 let cosmicDust: THREEType.Points<THREEType.BufferGeometry, THREEType.PointsMaterial> | null = null
 
-// 動畫控制
+// ?畫?制
 let raf = 0
 let startTime = 0
 
-// 滑鼠互動（容器座標轉 -1~1）
+// 滑?互?（容?座標? -1~1?
 const mousePos = { x: 0, y: 0 }
 
 let resizeObserver: ResizeObserver | null = null
@@ -64,6 +67,66 @@ const FILTER_PRESETS = [
   'hue-rotate(310deg) saturate(1.12)'
 ]
 
+const COLOR_PRESETS = [
+  {
+    background: '#dff3f6',
+    fog: '#dff9f6',
+    sphere: '#88f0d6',
+    emissive: '#38bdf8',
+    lightHue: 0.35,
+    lightSpread: 0.04,
+    zenHue: 0.42,
+    zenSpread: 0.06
+  },
+  {
+    background: '#f1f3ff',
+    fog: '#e4e8ff',
+    sphere: '#a5b4fc',
+    emissive: '#60a5fa',
+    lightHue: 0.58,
+    lightSpread: 0.05,
+    zenHue: 0.68,
+    zenSpread: 0.07
+  },
+  {
+    background: '#f5f0ff',
+    fog: '#ece4ff',
+    sphere: '#d8b4fe',
+    emissive: '#f472b6',
+    lightHue: 0.78,
+    lightSpread: 0.05,
+    zenHue: 0.88,
+    zenSpread: 0.07
+  },
+  {
+    background: '#f0fdfa',
+    fog: '#d1fae5',
+    sphere: '#6ee7b7',
+    emissive: '#22d3ee',
+    lightHue: 0.32,
+    lightSpread: 0.05,
+    zenHue: 0.46,
+    zenSpread: 0.06
+  },
+  {
+    background: '#fef7ed',
+    fog: '#fde8d1',
+    sphere: '#fcd34d',
+    emissive: '#fb7185',
+    lightHue: 0.08,
+    lightSpread: 0.05,
+    zenHue: 0.14,
+    zenSpread: 0.06
+  }
+]
+
+const paletteState = {
+  lightHue: 0.35,
+  lightSpread: 0.04,
+  zenHue: 0.42,
+  zenSpread: 0.06
+}
+
 function applyFilter(value: number) {
   const total = FILTER_PRESETS.length || 1
   const normalized = ((Math.round(value) % total) + total) % total
@@ -76,6 +139,27 @@ function applyFilter(value: number) {
   }
 }
 
+function applyPalette(value: number) {
+  const total = COLOR_PRESETS.length || 1
+  const normalized = ((Math.round(value) % total) + total) % total
+  const palette = COLOR_PRESETS[normalized]
+  paletteState.lightHue = palette.lightHue
+  paletteState.lightSpread = palette.lightSpread
+  paletteState.zenHue = palette.zenHue
+  paletteState.zenSpread = palette.zenSpread
+
+  if (renderer) {
+    renderer.setClearColor(palette.background, 1)
+  }
+  if (scene && scene.fog) {
+    scene.fog.color.set(palette.fog)
+  }
+  if (mainSphere && mainSphere.material) {
+    mainSphere.material.color.set(palette.sphere)
+    mainSphere.material.emissive.set(palette.emissive)
+  }
+}
+
 function handleMouseMove (event: MouseEvent) {
   const el = container.value
   if (!el) return
@@ -84,7 +168,7 @@ function handleMouseMove (event: MouseEvent) {
   mousePos.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
 }
 
-/** 產生圓形 Alpha 紋理（給 PointsMaterial 當 alphaMap） */
+/** ???形 Alpha 紋?（給 PointsMaterial ??alphaMap?*/
 function makeCircleAlphaTexture(size = 64): THREEType.Texture {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = size
@@ -93,7 +177,7 @@ function makeCircleAlphaTexture(size = 64): THREEType.Texture {
 
   const r = size / 2
   const g = ctx.createRadialGradient(r, r, 0, r, r, r)
-  // 中央亮、邊緣透明：柔和發光效果
+  // 中央亮、???：??發????
   g.addColorStop(0.0, 'rgba(255,255,255,1)')
   g.addColorStop(0.5, 'rgba(255,255,255,0.7)')
   g.addColorStop(1.0, 'rgba(255,255,255,0)')
@@ -110,9 +194,9 @@ function makeCircleAlphaTexture(size = 64): THREEType.Texture {
   return tex
 }
 
-/** 漂浮粒子（發光綠色；用自訂 Shader 畫圓點） */
+/** 漂浮粒?（發?????自?Shader ??點? */
 function createFloatingParticles(sceneRef: THREEType.Scene) {
-  const COUNT = 1200 // 中等密度
+  const COUNT = 1200 // Particle count for floating points
   const positions = new Float32Array(COUNT * 3)
   const colors = new Float32Array(COUNT * 3)
   const sizes = new Float32Array(COUNT)
@@ -120,7 +204,7 @@ function createFloatingParticles(sceneRef: THREEType.Scene) {
 
   for (let i = 0; i < COUNT; i++) {
     const i3 = i * 3
-    // 分佈在球殼（半徑 1.0~3.0）之間
+    // ????殼??? 1.0~3.0）???
     const radius = 1.0 + Math.random() * 2.0
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos(2 * Math.random() - 1)
@@ -128,7 +212,7 @@ function createFloatingParticles(sceneRef: THREEType.Scene) {
     positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta)
     positions[i3 + 2] = radius * Math.cos(phi)
 
-    // 綠色主調（H≈0.33）
+    // 綠色主調（H??.33?
     const h = 0.33 + (Math.random() - 0.5) * 0.05
     const s = 0.7 + Math.random() * 0.2
     const l = 0.5 + Math.random() * 0.2
@@ -218,7 +302,7 @@ function createFloatingParticles(sceneRef: THREEType.Scene) {
   sceneRef.add(floatingParticles)
 }
 
-/** 星塵（淡綠、用 PointsMaterial + 圓形 alphaMap，避免方塊） */
+/** ?塵（淡綠、用 PointsMaterial + ?形 alphaMap，避?方塊? */
 function createCosmicDust(sceneRef: THREEType.Scene) {
   const COUNT = 800
   const positions = new Float32Array(COUNT * 3)
@@ -226,7 +310,7 @@ function createCosmicDust(sceneRef: THREEType.Scene) {
 
   for (let i = 0; i < COUNT; i++) {
     const i3 = i * 3
-    // 更外層 3~8
+    // ???3~8
     const radius = 3 + Math.random() * 5
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos(2 * Math.random() - 1)
@@ -265,7 +349,7 @@ onMounted(async () => {
 
   const el = container.value
   if (!el) {
-    loadError.value = '找不到渲染容器'
+    loadError.value = 'Unable to initialize the canvas container.'
     isLoading.value = false
     return
   }
@@ -297,6 +381,7 @@ onMounted(async () => {
     el.appendChild(renderer.domElement)
     rendererReady = true
     applyFilter(desiredFilterIndex)
+    applyPalette(desiredFilterIndex)
 
     scene = new THREE.Scene()
     camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
@@ -428,7 +513,7 @@ onMounted(async () => {
     updateRendererSize()
     raf = requestAnimationFrame(loop)
   } catch (err) {
-    console.error('初始化呼吸球時發生錯誤：', err)
+    console.error('Failed to initialise Vanta WAVES effect')
     loadError.value = err instanceof Error ? err.message : String(err)
     rendererReady = false
   } finally {
@@ -481,7 +566,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- �~�h�e���]�� Tailwind ��l���^ -->
+  <!-- ~he] Tailwind l^ -->
   <div
     class="relative mx-auto aspect-square max-w-[550px] overflow-hidden rounded-full
            bg-[radial-gradient(circle_at_center,#f0faff_0%,#ffffff_100%)] 
@@ -489,10 +574,10 @@ onUnmounted(() => {
   >
     <div
       ref="container"
-      class="focus-sphere-container relative z-10 h-full w-full overflow-hidden rounded-full
+      class="focus-sphere-container relative z-10 h-full w-full overflow-hidden rounded-full will-change-transform
              shadow-[inset_0_0_120px_rgba(102,170,255,0.25),0_0_80px_rgba(102,170,255,0.3),0_0_160px_rgba(170,119,255,0.2),0_0_240px_rgba(255,136,221,0.15)]"
     >
-      <LoadingOverlay v-if="isLoading" label="喚醒專注能量" />
+      <LoadingOverlay v-if="isLoading" label="Preparing focus animation" />
       <div
         v-else-if="loadError"
         class="absolute inset-0 grid place-content-center bg-white/80 text-center text-sm text-emerald-600"
@@ -502,6 +587,9 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+
+
 
 
 

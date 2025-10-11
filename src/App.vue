@@ -1,35 +1,29 @@
 <script setup lang="ts">
-import { RouterView, type RouteLocationNormalizedLoaded } from 'vue-router'
-import NavBar from '@/components/NavBar.vue'
+import { RouterView } from 'vue-router'
+import AppLayout from '@/layouts/AppLayout.vue'
 import SessionSyncBanner from '@/components/SessionSyncBanner.vue'
 import BgmControl from '@/components/BgmControl.vue'
-
-function navOffsetClass(route?: RouteLocationNormalizedLoaded) {
-  return route?.meta?.navSpacing === false ? '' : 'pt-[calc(env(safe-area-inset-top)+4.5rem)]'
-}
 </script>
 
 <template>
-  <div class="relative flex min-h-screen flex-col bg-gradient-to-br from-emerald-50/70 via-white/80 to-slate-100/70 text-slate-900">
-    <div class="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_55%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.12),_transparent_50%)]"></div>
-    <NavBar />
-    <SessionSyncBanner />
-    <div class="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
-      <RouterView v-slot="{ Component, route }">
-        <Transition name="page-fade" mode="out-in">
-          <Suspense>
-            <div :class="['h-full', navOffsetClass(route)]">
-              <component :is="Component" />
+  <AppLayout>
+    <template #banner>
+      <SessionSyncBanner />
+    </template>
+
+    <RouterView v-slot="{ Component }">
+      <Transition name="page-fade" mode="out-in">
+        <Suspense>
+          <component :is="Component" />
+          <template #fallback>
+            <div class="card animate-fade-scale p-8 text-center text-ink-500">
+              Loading...
             </div>
-            <template #fallback>
-              <div :class="['grid min-h-full place-content-center bg-white/80 text-slate-400', navOffsetClass(route)]">
-                Loading...
-              </div>
-            </template>
-          </Suspense>
-        </Transition>
-      </RouterView>
-    </div>
-    <BgmControl />
-  </div>
+          </template>
+        </Suspense>
+      </Transition>
+    </RouterView>
+  </AppLayout>
+
+  <BgmControl />
 </template>

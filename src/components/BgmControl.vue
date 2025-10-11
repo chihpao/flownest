@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useBgm } from './useBgm'
 import { AMBIENT_TRACKS } from '@/config/sessionPresets'
@@ -114,7 +114,7 @@ function formatTime(seconds: number) {
       <div class="bgm-center">
         <button
           type="button"
-          :aria-label="isPlaying ? '暫停背景音樂' : '播放背景音樂'"
+          :aria-label="isPlaying ? '?怠???單?' : '?剜??單?'"
           class="bgm-play"
           @click="toggle"
         >
@@ -137,13 +137,13 @@ function formatTime(seconds: number) {
             :style="progressStyle"
             @input="handleProgressInput"
             @change="handleProgressChange"
-            aria-label="播放進度"
+            aria-label="?剜?脣漲"
           />
           <span class="bgm-time">{{ formattedDuration }}</span>
         </div>
       </div>
 
-      <div class="bgm-volume" role="group" aria-label="音量控制">
+      <div class="bgm-volume" role="group" aria-label="?喲??批">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="bgm-volume-icon" aria-hidden="true">
           <path d="M4 9h3l4-4v14l-4-4H4z" />
           <path d="M16.5 12a3.5 3.5 0 01-2.47 3.35v-6.7A3.5 3.5 0 0116.5 12z" />
@@ -157,7 +157,7 @@ function formatTime(seconds: number) {
           step="0.01"
           :value="volume"
           :style="{ '--val': volume }"
-          aria-label="調整音量"
+          aria-label="隤踵?喲?"
           @input="handleVolumeInput"
         />
         <span class="bgm-volume-value">{{ volumePercent }}</span>
@@ -356,12 +356,16 @@ function formatTime(seconds: number) {
 
 @media (max-width: 1024px) {
   .bgm-shell {
-    grid-template-columns: minmax(0, 200px) minmax(0, 1fr) minmax(0, 200px);
+    grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
     gap: 1rem;
   }
 
-  .bgm-volume-slider {
-    width: 100px;
+  .bgm-center {
+    justify-content: center;
+  }
+
+  .bgm-volume {
+    display: none;
   }
 }
 

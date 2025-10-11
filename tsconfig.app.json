@@ -6,7 +6,7 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["node", "vite/client", "vue-router"],
+    "types": ["node", "vite/client", "vite-plugin-pwa/client", "vue-router"],
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

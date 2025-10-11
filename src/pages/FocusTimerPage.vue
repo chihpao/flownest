@@ -1,6 +1,7 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { UiButton, UiCard, UiSpinner } from '@/components/ui'
 import ThreeBreathingSphere from '@/components/ThreeBreathingSphere.vue'
 import { useSessions } from '@/stores/useSessions'
 import { findIntentById, findAmbientById } from '@/config/sessionPresets'
@@ -11,18 +12,20 @@ import { useAuth } from '@/stores/useAuth'
 import { useLoginRedirect } from '@/composables/useLoginRedirect'
 import EncouragementGenerator from '@/components/ai/EncouragementGenerator.vue'
 import SupportImageGenerator from '@/components/ai/SupportImageGenerator.vue'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const route = useRoute()
 const sessions = useSessions()
 const auth = useAuth()
 const { pushLogin } = useLoginRedirect()
+const { toast } = useToast()
 
 const aiCoach = useAiCoach()
 aiCoach.init()
 
 const state = ref<'running' | 'finished'>('running')
-const activeTitle = ref('專注時光')
+const activeTitle = ref('專注任務')
 const minutesPlanned = ref(25)
 const remainingSeconds = ref(0)
 const startedAtMs = ref<number | null>(null)
@@ -43,13 +46,14 @@ const sharing = ref(false)
 let timerHandle: number | null = null
 const spherePaletteIndex = ref(0)
 const BREATHING_PALETTE_STEPS = 5
+const prefersReducedMotion = ref(false)
 
 const selectedIntent = computed(() => findIntentById(route.query.intent as string | null))
 const selectedAmbient = computed(() => findAmbientById(route.query.ambient as string | null))
 const breakMinutes = computed(() => {
   const raw = Number(route.query.break)
   if (Number.isFinite(raw) && raw > 0) return Math.round(raw)
-  return selectedIntent.value.suggestedBreak
+  return selectedIntent.value?.suggestedBreak ?? 5
 })
 
 const formattedCountdown = computed(() => {
@@ -69,7 +73,7 @@ const progressPercent = computed(() => {
 
 function clearTimer() {
   if (timerHandle !== null) {
-    clearInterval(timerHandle)
+    window.clearInterval(timerHandle)
     timerHandle = null
   }
 }
@@ -83,7 +87,23 @@ function updateRemaining() {
   }
 }
 
+function armTimer() {
+  if (timerHandle !== null || deadlineMs.value == null) return
+  updateRemaining()
+  timerHandle = window.setInterval(updateRemaining, 1000)
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    updateRemaining()
+    armTimer()
+  } else {
+    clearTimer()
+  }
+}
+
 function startCountdownFromRoute() {
+  clearTimer()
   const minutesParam = Number(route.query.m)
   if (!Number.isFinite(minutesParam) || minutesParam <= 0) {
     router.replace({ name: 'setup' }).catch(() => {})
@@ -91,35 +111,43 @@ function startCountdownFromRoute() {
   }
   minutesPlanned.value = Math.min(600, Math.max(1, Math.round(minutesParam)))
   const titleParam = (route.query.title as string | undefined)?.trim()
-  activeTitle.value = titleParam && titleParam.length ? titleParam : (selectedIntent.value?.name ?? '專注時光')
+  activeTitle.value = titleParam && titleParam.length ? titleParam : (selectedIntent.value?.name ?? '專注任務')
   startedAtMs.value = Date.now()
   deadlineMs.value = startedAtMs.value + minutesPlanned.value * 60_000
   remainingSeconds.value = minutesPlanned.value * 60
   lastSession.value = null
   errorMessage.value = ''
-  state.value = 'running'
-  spherePaletteIndex.value = 0
-  aiCoach.setSessionContext(null)
-  aiCoach.clearEncouragementError()
-  aiCoach.clearImageError()
-  updateRemaining()
-  clearTimer()
-  timerHandle = window.setInterval(updateRemaining, 1000)
+  armTimer()
   return true
 }
 
 function cycleSpherePalette() {
-  if (state.value !== 'running') return
+  if (state.value !== 'running' || prefersReducedMotion.value) return
   spherePaletteIndex.value = (spherePaletteIndex.value + 1) % BREATHING_PALETTE_STEPS
 }
 
 onMounted(() => {
+  const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const handleMotionPreference = () => {
+    prefersReducedMotion.value = mediaQuery.matches
+  }
+  handleMotionPreference()
+  mediaQuery.addEventListener('change', handleMotionPreference)
+
   sessions.listenMine().catch(() => {})
-  startCountdownFromRoute()
+  const ready = startCountdownFromRoute()
+  if (ready) {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
+
+  onBeforeUnmount(() => {
+    mediaQuery.removeEventListener('change', handleMotionPreference)
+  })
 })
 
 onBeforeUnmount(() => {
   clearTimer()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 async function completeSession(options: { finishedEarly?: boolean } = {}) {
@@ -176,12 +204,14 @@ async function completeSession(options: { finishedEarly?: boolean } = {}) {
       startedAt: payload.startedAt,
       finishedAt,
     }
-    shareMessage.value = `分享這次專注：《${payload.title}》`
+    shareMessage.value = `分享我的專注紀錄：${payload.title}`
     shareStatus.value = 'idle'
     shareError.value = ''
     aiCoach.generateForSession(sessionContext, { locale: 'zh' }).catch(() => {})
   } catch (err: any) {
-    errorMessage.value = err?.message ?? String(err)
+    const message = err?.message ?? String(err)
+    errorMessage.value = message
+    toast.error('無法儲存本次專注', { description: message })
   } finally {
     logging.value = false
   }
@@ -207,7 +237,7 @@ function goToDone() {
 async function shareToWall() {
   if (!lastSession.value) return
   if (!shareMessage.value.trim()) {
-    shareError.value = '請輸入想分享的內容'
+    shareError.value = '分享前請先寫幾句話。'
     return
   }
   if (!auth.isAuthed) {
@@ -226,8 +256,10 @@ async function shareToWall() {
     })
     shareStatus.value = 'success'
   } catch (err: any) {
+    const message = err?.message ?? String(err)
     shareStatus.value = 'error'
-    shareError.value = err?.message ?? String(err)
+    shareError.value = message
+    toast.error('無法發佈分享', { description: message })
   } finally {
     sharing.value = false
   }
@@ -235,7 +267,7 @@ async function shareToWall() {
 
 watch(() => lastSession.value?.title, (title) => {
   if (title) {
-    shareMessage.value = `分享這次專注：《${title}》`
+    shareMessage.value = `分享我的專注紀錄：${title}`
   }
 })
 
@@ -248,142 +280,137 @@ watch(shareMessage, () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-emerald-50 via-sky-50 to-white px-4 pb-24 text-slate-900 sm:px-6">
-    <section class="mx-auto flex w-full max-w-4xl flex-col gap-10">
-      <header class="space-y-2 text-center animate-fade-up">
-        <span class="inline-flex items-center justify-center rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold tracking-[0.2em] text-emerald-600">專注倒數</span>
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">安排好目標，然後專心完成它</h1>
-        <p class="text-sm text-slate-500">
-          倒數結束時會自動紀錄成果；未登入時紀錄會暫存於瀏覽器，登入後自動同步到帳號。
-        </p>
-      </header>
+  <div class="space-y-8">
+    <header class="space-y-3 text-center motion-safe:animate-fade-up">
+      <span class="badge mx-auto">專注計時</span>
+      <h1 class="text-3xl font-semibold text-ink-900 sm:text-4xl">維持專注節奏，延續你的連勝。</h1>
+      <p class="text-sm text-ink-500">
+        專注時段結束後會自動儲存；保持此分頁在前景可確保倒數精準。
+      </p>
+    </header>
 
-      <div v-if="state === 'running'" class="glass-panel animate-fade-scale space-y-8 p-8">
-        <div class="flex flex-col items-center gap-2 text-center">
-          <p class="text-xs tracking-[0.2em] text-emerald-500">目前進行中</p>
-          <h2 class="text-2xl font-semibold text-slate-900 sm:text-3xl">{{ activeTitle }}</h2>
-          <p class="text-sm text-slate-500">{{ minutesPlanned }} 分鐘專注</p>
-        </div>
+    <UiCard v-if="state === 'running'" class="space-y-8 motion-safe:animate-fade-scale">
+      <template #header>
+        進行中
+      </template>
 
-        <div class="mx-auto flex w-full max-w-sm flex-col items-center gap-6">
-          <p class="font-mono text-5xl font-bold tracking-tight text-slate-900">{{ formattedCountdown }}</p>
-          <div
-            class="relative w-full cursor-pointer select-none"
-            role="button"
-            tabindex="0"
-            aria-label="切換呼吸球配色"
-            @click="cycleSpherePalette"
-            @keydown.enter.prevent="cycleSpherePalette()"
-            @keydown.space.prevent="cycleSpherePalette()"
-          >
-            <ThreeBreathingSphere class="w-full" :palette-index="spherePaletteIndex" />
-            <svg class="pointer-events-none absolute inset-0 h-full w-full text-emerald-300/70" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(15, 118, 110, 0.12)" stroke-width="4" />
-              <circle
-                cx="60"
-                cy="60"
-                r="54"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="4"
-                stroke-linecap="round"
-                pathLength="100"
-                :style="{ strokeDasharray: 100, strokeDashoffset: Math.max(0, 100 - progressPercent) }"
-                transform="rotate(-90 60 60)"
-              />
-            </svg>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-center gap-4">
-          <button
-            type="button"
-            class="rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
-            @click="finishNow"
-          >
-            提早完成
-          </button>
-          <button
-            type="button"
-            class="rounded-full border border-slate-200 px-6 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
-            @click="cancelSession"
-          >
-            取消本次專注
-          </button>
-        </div>
+      <div class="space-y-2 text-center">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">目前標題</p>
+        <h2 class="text-2xl font-semibold text-ink-900 sm:text-3xl">{{ activeTitle }}</h2>
+        <p class="text-sm text-ink-500">預計 {{ minutesPlanned }} 分鐘</p>
       </div>
 
-      <div v-else class="glass-panel animate-fade-scale space-y-6 p-8 text-center">
-        <div class="space-y-2">
-          <h2 class="text-2xl font-semibold text-emerald-600">完成一次專注！</h2>
-          <p class="text-sm text-slate-500">
-            紀錄已保存{{ sessions.isGuest ? '在瀏覽器中' : '到你的帳號' }}。你可以立即再來一輪或前往成果頁檢視完整紀錄。
-          </p>
+      <div class="mx-auto flex w-full max-w-xs flex-col items-center gap-6">
+        <p class="font-mono text-5xl font-bold tracking-tight text-ink-900 sm:text-6xl">{{ formattedCountdown }}</p>
+        <div
+          class="relative aspect-square w-full cursor-pointer select-none text-brand-400/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200"
+          role="button"
+          tabindex="0"
+          aria-label="切換背景色盤"
+          @click="cycleSpherePalette"
+          @keydown.enter.prevent="cycleSpherePalette()"
+          @keydown.space.prevent="cycleSpherePalette()"
+        >
+          <ThreeBreathingSphere class="h-full w-full will-change-transform" :palette-index="spherePaletteIndex" />
+          <svg class="pointer-events-none absolute inset-0 h-full w-full text-current" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(15, 118, 110, 0.12)" stroke-width="4" />
+            <circle
+              cx="60"
+              cy="60"
+              r="54"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              pathLength="100"
+              :style="{ strokeDasharray: 100, strokeDashoffset: Math.max(0, 100 - progressPercent) }"
+              transform="rotate(-90 60 60)"
+            />
+          </svg>
         </div>
-
-        <div v-if="lastSession" class="space-y-4 text-left">
-          <div class="space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm text-emerald-700">
-            <p class="text-base font-semibold text-emerald-700">{{ lastSession.title }}</p>
-            <p>計畫：{{ lastSession.minutesPlanned }} 分鐘 · 實際：{{ lastSession.minutesActual }} 分鐘</p>
-            <p class="text-xs text-emerald-600/90">完成時間：{{ new Date(lastSession.finishedAt).toLocaleString() }}</p>
-            <p class="text-xs text-emerald-600/90" v-if="selectedAmbient">音景：{{ selectedAmbient.label }}</p>
-            <p class="text-xs text-emerald-600/90">建議休息：{{ breakMinutes }} 分鐘</p>
-          </div>
-
-          <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 text-sm text-slate-600">
-            <div class="flex items-center justify-between">
-              <p class="font-semibold text-slate-800">分享至留言牆</p>
-              <span v-if="shareStatus === 'success'" class="text-xs font-semibold text-emerald-600">已發佈</span>
-            </div>
-            <textarea
-              v-model="shareMessage"
-              rows="3"
-              placeholder="這次專注讓我……"
-              class="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-            ></textarea>
-            <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-              <p>{{ auth.isAuthed ? '已登入，可以直接發佈成果。' : '請登入後再分享專注成果。' }}</p>
-              <button
-                type="button"
-                class="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
-                :disabled="sharing"
-                @click="shareToWall"
-              >
-                {{ sharing ? '分享中…' : '分享到留言牆' }}
-              </button>
-            </div>
-            <p v-if="shareError" class="text-xs text-rose-500">{{ shareError }}</p>
-            <p v-else-if="shareStatus === 'success'" class="text-xs text-emerald-500">分享成功！記得去留言牆看看。</p>
-          </div>
-        </div>
-        <div class="grid gap-4 md:grid-cols-2">
-          <EncouragementGenerator />
-          <SupportImageGenerator />
-        </div>
-
-
-        <div class="flex flex-wrap items-center justify-center gap-4">
-          <button
-            type="button"
-            class="rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
-            :disabled="logging"
-            @click="startAnother"
-          >
-            再來一輪
-          </button>
-          <button
-            type="button"
-            class="rounded-full border border-slate-200 px-6 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
-            @click="goToDone"
-          >
-            查看成果紀錄
-          </button>
-        </div>
-
-        <p v-if="errorMessage" class="text-xs text-rose-500">{{ errorMessage }}</p>
+        <p class="text-xs text-ink-400">按 Enter 或空白鍵切換色盤；若系統設定為減少動畫，效果會自動降低。</p>
       </div>
-    </section>
-  </main>
+
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <UiButton variant="primary" class="min-w-[8rem] justify-center" @click="finishNow">
+          提前完成
+        </UiButton>
+        <UiButton variant="ghost" class="min-w-[8rem] justify-center" @click="cancelSession">
+          取消本次專注
+        </UiButton>
+      </div>
+    </UiCard>
+
+    <div v-else class="space-y-6 motion-safe:animate-fade-up">
+      <UiCard>
+        <template #header>
+          紀錄已儲存
+        </template>
+        <div class="space-y-4 text-left text-sm text-ink-600">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl border border-brand-100 bg-brand-50/70 p-4">
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">摘要</p>
+              <p class="mt-2 text-base font-semibold text-brand-700">{{ lastSession?.title ?? activeTitle }}</p>
+              <p class="mt-1 text-sm text-brand-600">計畫 {{ minutesPlanned }} 分鐘 / 實際 {{ lastSession?.minutesActual ?? minutesPlanned }} 分鐘</p>
+              <p v-if="lastSession" class="mt-2 text-xs text-brand-500">完成於 {{ new Date(lastSession.finishedAt).toLocaleString() }}</p>
+            </div>
+            <div class="rounded-2xl border border-ink-100 bg-white/80 p-4">
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink-500">休息建議</p>
+              <p class="mt-2 text-base font-semibold text-ink-800">建議休息 {{ breakMinutes }} 分鐘</p>
+              <p v-if="selectedAmbient" class="mt-1 text-xs text-ink-500">環境音軌：{{ selectedAmbient.label }}</p>
+            </div>
+          </div>
+
+          <div v-if="logging" class="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 p-3 text-sm text-brand-600">
+            <UiSpinner size="sm" />
+            正在儲存紀錄…
+          </div>
+
+          <p v-if="errorMessage" class="text-xs text-rose-500">{{ errorMessage }}</p>
+        </div>
+      </UiCard>
+
+      <UiCard>
+        <template #header>
+          分享至社群
+        </template>
+        <div class="space-y-4 text-left">
+          <textarea
+            v-model="shareMessage"
+            rows="3"
+            placeholder="這段專注完成了什麼？"
+            class="field h-28 resize-none"
+          ></textarea>
+          <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500">
+            <p>{{ auth.isAuthed ? '準備好就發佈，記得鼓勵且具體。' : '登入後即可分享至動態牆。' }}</p>
+            <UiButton
+              variant="primary"
+              class="justify-center"
+              :loading="sharing"
+              :disabled="!shareMessage.trim()"
+              @click="shareToWall"
+            >
+              {{ shareStatus === 'success' ? '已分享！' : '發佈分享' }}
+            </UiButton>
+          </div>
+          <p v-if="shareError" class="text-xs text-rose-500">{{ shareError }}</p>
+          <p v-else-if="shareStatus === 'success'" class="text-xs text-brand-600">已發布到動態牆，太棒了！</p>
+        </div>
+      </UiCard>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <EncouragementGenerator />
+        <SupportImageGenerator />
+      </div>
+
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <UiButton variant="primary" class="min-w-[8rem] justify-center" :disabled="logging" @click="startAnother">
+          再開始一輪
+        </UiButton>
+        <UiButton variant="ghost" class="min-w-[8rem] justify-center" @click="goToDone">
+          查看歷史紀錄
+        </UiButton>
+      </div>
+    </div>
+  </div>
 </template>
-
-
